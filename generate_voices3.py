@@ -98,7 +98,7 @@ def merge_wavs(files, outfile):
         "-ar", "24000",
         "-ac", "1",
         str(outfile)
-    ], check=True)
+    ], check=True, stdin=subprocess.DEVNULL)
 
 def sec_to_srt(sec):
     h = int(sec // 3600)

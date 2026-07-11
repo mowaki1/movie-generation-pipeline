@@ -31,7 +31,8 @@ motion_prompt_suffix = ",subtle natural motion,gentle breathing,slight breeze,ci
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:
     print(" ".join(cmd))
-    subprocess.run(cmd, check=True, cwd=str(cwd) if cwd else None)
+    # stdin=DEVNULL: バックグラウンド実行時にffmpeg等が標準入力待ちでSIGTTIN停止するのを防ぐ
+    subprocess.run(cmd, check=True, cwd=str(cwd) if cwd else None, stdin=subprocess.DEVNULL)
 
 def get_duration(path: Path) -> float:
     import subprocess
