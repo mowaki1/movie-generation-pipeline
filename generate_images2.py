@@ -1,0 +1,106 @@
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+import json
+
+import torch
+from diffusers import FluxPipeline
+
+import sys
+from pathlib import Path
+
+args = sys.argv
+
+OUTDIR = Path(f"jobs/story_pipeline{args[1]}")
+OUTDIR.mkdir(parents=True, exist_ok=True)
+
+model_id = "black-forest-labs/FLUX.1-dev"
+
+prompt_suffix = "photojournalism,RAW photo,ultra realistic,DSLR,85mm lens,skin texture,natural lighting,real photograph,NOT illustration,NOT anime,NOT painting,"
+
+pipe = FluxPipeline.from_pretrained(
+    model_id,
+    torch_dtype=torch.bfloat16,
+)
+pipe.to("cuda")
+
+pipe.vae.enable_slicing()
+pipe.vae.enable_tiling()
+
+
+with open(OUTDIR / "final_story.json", encoding="utf-8") as f:
+    story = json.load(f)
+
+prompts = []
+for scene in story["scenes"]:
+    prompts.append(scene["image_prompt"] + prompt_suffix)
+
+for i, text_prompt in enumerate(prompts):
+    file_name = f"image{i + 1}.png"
+
+    if (OUTDIR / file_name).exists():
+        print(f"skip (cached): {file_name}")
+        continue
+
+    # ========================================================
+    # 1. CLIP側のエンコード & プーリングベクトルの抽出
+    # ========================================================
+    text_inputs = pipe.tokenizer(
+        text_prompt,
+        padding="max_length",
+        max_length=77,
+        truncation=True,
+        return_tensors="pt",
+    ).to("cuda")
+    
+    with torch.no_grad():
+        # CLIPの通常の出力 (77トークン分)
+        encoder_outputs = pipe.text_encoder(text_inputs.input_ids, output_hidden_states=True)
+        prompt_embeds = encoder_outputs[0]
+        # FLUXが要求する768次元pooledベクトルは、このCLIPのプーリングされた出力です
+        pooled_prompt_embeds = encoder_outputs.pooler_output
+
+    # ========================================================
+    # 2. T5側のエンコード (256トークンまでの長さを保持)
+    # ========================================================
+    text_inputs_2 = pipe.tokenizer_2(
+        text_prompt,
+        padding="max_length",
+        max_length=512, # 512まで拡張可能です
+        truncation=True,
+        return_tensors="pt",
+    ).to("cuda")
+    
+    with torch.no_grad():
+        # T5の出力ベクトル (長文用)
+        text_embeds_2 = pipe.text_encoder_2(text_inputs_2.input_ids)[0]
+
+    # ========================================================
+    # 3. 2つのエンコーダーの出力をFLUXの仕様通りに結合 (4096次元)
+    # ========================================================
+    # FLUXは内部で CLIP(77x4096にパディング) と T5(256x4096) を結合して使用します
+    # ここでCLIP側の次元をT5側に合わせてパディング処理を行います
+    padding = torch.zeros(
+        (prompt_embeds.shape[0], prompt_embeds.shape[1], text_embeds_2.shape[2] - prompt_embeds.shape[2]),
+        device=prompt_embeds.device,
+        dtype=prompt_embeds.dtype,
+    )
+    prompt_embeds = torch.cat([prompt_embeds, padding], dim=-1)
+    
+    # 最終的なプロンプト埋め込みベクトルの結合
+    final_prompt_embeds = torch.cat([prompt_embeds, text_embeds_2], dim=1)
+
+    # ========================================================
+    # 4. 推論実行
+    # ========================================================
+    image = pipe(
+        prompt_embeds=final_prompt_embeds,       # 結合した最終テキスト対応ベクトル
+        pooled_prompt_embeds=pooled_prompt_embeds, # CLIP由来の768次元ベクトル
+        height=1088,  # 16px単位制約のため1080ではなく1088で生成し、movie側で1080にクロップする
+        width=1920,
+        guidance_scale=3.5,
+        num_inference_steps=50,
+        max_sequence_length=512,
+    ).images[0]
+
+    image.save(OUTDIR / file_name)
+    print(f"saved {file_name}")

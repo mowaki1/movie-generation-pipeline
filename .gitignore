@@ -1,0 +1,10 @@
+*
+!/generate_story6.py
+!/generate_story7.py
+!/generate_images2.py
+!/generate_voices3.py
+!/generate_movie4.py
+!/run_pipeline.py
+!/include/
+!/include/**
+!/.gitignore
