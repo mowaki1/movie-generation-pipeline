@@ -11,7 +11,7 @@ if len(args) < 3:
     print(f"usage: python {Path(args[0]).name} <pipeline_no> <theme>")
     raise SystemExit(1)
 
-MODEL = "gemma4:e4b"
+MODEL = "gemma4:31b-it-bf16"
 API_URL = "http://localhost:11434/api/generate"
 MOVIE_THEME = args[2]
 
