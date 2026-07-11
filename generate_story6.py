@@ -28,7 +28,10 @@ OUTDIR = Path(f"jobs/story_pipeline{args[1]}")
 OUTDIR.mkdir(parents=True, exist_ok=True)
 
 
-def ask(prompt, filename=None, json_mode=False, num_predict=4096):
+def ask(prompt, filename=None, num_predict=4096):
+    # 注意: "format": "json" (文法制約付きデコーディング)はgemma4:31b-it-bf16で
+    # 出力が"own own own..."のように壊れる不具合があるため使用しない。
+    # プロンプト側の指示とrepair_json_array/safe_json_loadsのフェンス除去で代替する。
     payload = {
         "model": MODEL,
         "prompt": prompt,
@@ -40,9 +43,6 @@ def ask(prompt, filename=None, json_mode=False, num_predict=4096):
             "num_predict": num_predict,
         },
     }
-
-    if json_mode:
-        payload["format"] = "json"
 
     for _ in range(3):
         res = requests.post(API_URL, json=payload, timeout=3000)
@@ -61,13 +61,13 @@ def ask(prompt, filename=None, json_mode=False, num_predict=4096):
     return text
 
 
-def ask_cached(prompt, filename, json_mode=False, num_predict=4096):
+def ask_cached(prompt, filename, num_predict=4096):
     path = OUTDIR / filename
     if path.exists():
         print(f"skip (cached): {filename}")
         return path.read_text(encoding="utf-8")
 
-    return ask(prompt, filename=filename, json_mode=json_mode, num_predict=num_predict)
+    return ask(prompt, filename=filename, num_predict=num_predict)
 
 
 def extract_json_array(text):
@@ -105,9 +105,16 @@ def extract_json_array(text):
 
     raise ValueError("JSON配列またはscenesが見つかりません")
 
+def strip_code_fence(text):
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text)
+    return text.strip()
+
 def safe_json_loads(text, fallback):
     try:
-        return json.loads(text)
+        return json.loads(strip_code_fence(text))
     except json.JSONDecodeError:
         return fallback
 
@@ -458,7 +465,6 @@ story_structure には必ず act1, act2, act3, act4 を入れること。
 design_text = ask_cached(
     design_prompt,
     filename="01_design.json",
-    json_mode=True,
     num_predict=4096,
 )
 
@@ -592,7 +598,6 @@ scene_no {start} から {end} まで、全番号を1行ずつ出力すること�
         outline_text = ask_cached(
             outline_prompt,
             filename=f"02_outline_{start:03d}_{end:03d}_raw.txt",
-            json_mode=False,
             num_predict=4096,
         )
 
@@ -694,7 +699,6 @@ Markdown禁止。
         text = ask_cached(
             narration_prompt,
             filename=f"03_narration_{start:03d}_{end:03d}_raw.json",
-            json_mode=False,
             num_predict=4096,
         )
         try:
@@ -805,7 +809,6 @@ Narration:
     visual_text = ask_cached(
         visual_prompt,
         filename=f"visual_{scene_no:03d}.json",
-        json_mode=True,
         num_predict=1024,
     )
 
