@@ -2,6 +2,7 @@ import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import json
 
+import numpy as np
 import torch
 from diffusers import FluxPipeline
 
@@ -83,6 +84,29 @@ def encode_prompt(text_prompt):
     return final_prompt_embeds, pooled_prompt_embeds
 
 
+def is_black(image) -> bool:
+    return np.array(image.convert("L")).mean() < 5
+
+
+def generate(prompt_embeds, pooled_prompt_embeds, use_negative_prompt: bool):
+    kwargs = {}
+    if use_negative_prompt:
+        kwargs["negative_prompt_embeds"] = negative_prompt_embeds
+        kwargs["negative_pooled_prompt_embeds"] = negative_pooled_prompt_embeds
+        kwargs["true_cfg_scale"] = 3.5
+
+    return pipe(
+        prompt_embeds=prompt_embeds,       # 結合した最終テキスト対応ベクトル
+        pooled_prompt_embeds=pooled_prompt_embeds, # CLIP由来の768次元ベクトル
+        height=1088,  # 16px単位制約のため1080ではなく1088で生成し、movie側で1080にクロップする
+        width=1920,
+        guidance_scale=3.5,
+        num_inference_steps=50,
+        max_sequence_length=512,
+        **kwargs,
+    ).images[0]
+
+
 # ネガティブプロンプトは全シーン共通なので1回だけエンコードする
 negative_prompt_embeds, negative_pooled_prompt_embeds = encode_prompt(negative_prompt)
 
@@ -103,21 +127,14 @@ for i, text_prompt in enumerate(prompts):
 
     final_prompt_embeds, pooled_prompt_embeds = encode_prompt(text_prompt)
 
-    # ========================================================
-    # 推論実行(true_cfg_scale>1でネガティブプロンプトが有効になる)
-    # ========================================================
-    image = pipe(
-        prompt_embeds=final_prompt_embeds,       # 結合した最終テキスト対応ベクトル
-        pooled_prompt_embeds=pooled_prompt_embeds, # CLIP由来の768次元ベクトル
-        negative_prompt_embeds=negative_prompt_embeds,
-        negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
-        true_cfg_scale=3.5,
-        height=1088,  # 16px単位制約のため1080ではなく1088で生成し、movie側で1080にクロップする
-        width=1920,
-        guidance_scale=3.5,
-        num_inference_steps=50,
-        max_sequence_length=512,
-    ).images[0]
+    # 推論実行(true_cfg_scale>1でネガティブプロンプトが有効になる)。
+    # 暗いシーン等でtrue_cfg_scale使用時にbf16でNaNが起き、
+    # 真っ黒な画像になることがあるため、検出したらネガティブプロンプト無しでリトライする。
+    image = generate(final_prompt_embeds, pooled_prompt_embeds, use_negative_prompt=True)
+
+    if is_black(image):
+        print(f"WARNING: {file_name} was black, retrying without negative prompt")
+        image = generate(final_prompt_embeds, pooled_prompt_embeds, use_negative_prompt=False)
 
     image.save(OUTDIR / file_name)
     print(f"saved {file_name}")
