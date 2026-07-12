@@ -18,25 +18,27 @@ with open(BASE / "final_story.json", encoding="utf-8") as f:
     story = json.load(f)
 
 SCENES = []
-IMAGE_PROMPTS = {}
+MOTION_PROMPTS = {}
 for scene in story["scenes"]:
     SCENES.append(scene["scene_no"])
-    IMAGE_PROMPTS[scene["scene_no"]] = scene["image_prompt"]
+    MOTION_PROMPTS[scene["scene_no"]] = scene["motion_prompt"]
 
-WAN22_DIR = Path("/home/mowaki/roujin_home_senka/Wan2.2")
-WAN22_CKPT = Path("/data/models/wan2.2/Wan2.2-TI2V-5B")
-WAN22_SIZE = "1280*704"
-WAN22_FPS = 24
-WAN22_MAX_SECONDS = 5.0
-WAN22_SAMPLE_STEPS = 30
-
-motion_prompt_suffix = ",subtle natural motion,gentle breathing,slight breeze,cinemagraph,photorealistic,slow movement,NOT illustration,NOT anime,"
+UV_BIN = str(Path.home() / ".local/bin/uv")
+LTX_DIR = Path("/home/mowaki/roujin_home_senka/LTX-2")
+LTX_CKPT = Path("/data/models/ltx/ltx-2.3/ltx-2.3-22b-distilled-1.1.safetensors")
+LTX_UPSAMPLER = Path("/data/models/ltx/ltx-2.3/ltx-2.3-spatial-upscaler-x2-1.1.safetensors")
+LTX_GEMMA_ROOT = Path("/data/models/ltx/gemma-3-12b")
+LTX_HEIGHT = 704
+LTX_WIDTH = 1280
+LTX_FPS = 24
+LTX_MAX_SECONDS = 20.0
+LTX_IMAGE_STRENGTH = 0.85
 
 def compute_frame_num(duration_sec: float) -> int:
-    # Wan2.2のVAE時間方向ストライドが4のため、frame_numは 4k+1 でなければならない
-    target = min(duration_sec, WAN22_MAX_SECONDS) * WAN22_FPS
-    n = round((target - 1) / 4) * 4 + 1
-    return max(25, min(121, n))
+    # LTX-2はnum_frames = 8k+1でなければならない
+    target = min(duration_sec, LTX_MAX_SECONDS) * LTX_FPS
+    n = round((target - 1) / 8) * 8 + 1
+    return max(9, min(481, n))
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:
     print(" ".join(cmd))
@@ -63,20 +65,22 @@ def generate_motion_clip(scene_no: int, image: Path, out: Path, duration_sec: fl
         print(f"skip (cached): {out}")
         return
 
-    prompt = IMAGE_PROMPTS[scene_no] + motion_prompt_suffix
+    prompt = MOTION_PROMPTS[scene_no]
     frame_num = compute_frame_num(duration_sec)
 
     run([
-        sys.executable, "generate.py",
-        "--task", "ti2v-5B",
-        "--size", WAN22_SIZE,
-        "--ckpt_dir", str(WAN22_CKPT),
-        "--image", str(image.resolve()),
+        UV_BIN, "run", "python", "-m", "ltx_pipelines.distilled",
+        "--distilled-checkpoint-path", str(LTX_CKPT),
+        "--spatial-upsampler-path", str(LTX_UPSAMPLER),
+        "--gemma-root", str(LTX_GEMMA_ROOT),
+        "--image", str(image.resolve()), "0", str(LTX_IMAGE_STRENGTH),
         "--prompt", prompt,
-        "--frame_num", str(frame_num),
-        "--sample_steps", str(WAN22_SAMPLE_STEPS),
-        "--save_file", str(out.resolve()),
-    ], cwd=WAN22_DIR)
+        "--height", str(LTX_HEIGHT),
+        "--width", str(LTX_WIDTH),
+        "--num-frames", str(frame_num),
+        "--output-path", str(out.resolve()),
+        "--seed", str(scene_no),
+    ], cwd=LTX_DIR)
 
 def make_scene_video(scene_no: int) -> Path:
     image = IMAGE_DIR / f"image{scene_no}.png"
@@ -94,8 +98,9 @@ def make_scene_video(scene_no: int) -> Path:
 
     duration = get_duration(voice)
 
-    # 1. Wan2.2で先頭~5秒(ナレーションがそれより短ければその長さ)だけ動きをつける
+    # 1. LTX-2で先頭~20秒(ナレーションがそれより短ければその長さ)だけ動きをつける
     #    (1280x704で生成、ffmpegで1920x1088にアップスケール)
+    #    LTX-2は音声も同時生成するが不要なので-anで除去する
     motion_raw = VIDEO_DIR / f"motion{scene_no}_raw.mp4"
     generate_motion_clip(scene_no, image, motion_raw, duration)
 
@@ -104,6 +109,7 @@ def make_scene_video(scene_no: int) -> Path:
         run([
             "ffmpeg", "-y",
             "-i", str(motion_raw),
+            "-an",
             "-vf", "scale=1920:1088,format=yuv420p",
             "-c:v", "h264_nvenc",
             "-preset", "p4",
