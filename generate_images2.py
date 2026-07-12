@@ -15,7 +15,11 @@ OUTDIR.mkdir(parents=True, exist_ok=True)
 
 model_id = "black-forest-labs/FLUX.1-dev"
 
-prompt_suffix = "photojournalism,RAW photo,ultra realistic,DSLR,85mm lens,skin texture,natural lighting,real photograph,NOT illustration,NOT anime,NOT painting,"
+prompt_suffix = "photojournalism,RAW photo,ultra realistic,DSLR,85mm lens,skin texture,natural lighting,real photograph,"
+
+# "NOT illustration"のような否定文は拡散モデルに効きにくいため、
+# true_cfg_scaleによる本物のネガティブプロンプトとして分離して与える。
+negative_prompt = "illustration,anime,cartoon,3D render,CGI,digital painting,drawing,concept art,watermark,stock photo watermark,logo,text overlay,blurry,low quality"
 
 pipe = FluxPipeline.from_pretrained(
     model_id,
@@ -27,20 +31,7 @@ pipe.vae.enable_slicing()
 pipe.vae.enable_tiling()
 
 
-with open(OUTDIR / "final_story.json", encoding="utf-8") as f:
-    story = json.load(f)
-
-prompts = []
-for scene in story["scenes"]:
-    prompts.append(scene["image_prompt"] + prompt_suffix)
-
-for i, text_prompt in enumerate(prompts):
-    file_name = f"image{i + 1}.png"
-
-    if (OUTDIR / file_name).exists():
-        print(f"skip (cached): {file_name}")
-        continue
-
+def encode_prompt(text_prompt):
     # ========================================================
     # 1. CLIP側のエンコード & プーリングベクトルの抽出
     # ========================================================
@@ -51,7 +42,7 @@ for i, text_prompt in enumerate(prompts):
         truncation=True,
         return_tensors="pt",
     ).to("cuda")
-    
+
     with torch.no_grad():
         # CLIPの通常の出力 (77トークン分)
         encoder_outputs = pipe.text_encoder(text_inputs.input_ids, output_hidden_states=True)
@@ -69,7 +60,7 @@ for i, text_prompt in enumerate(prompts):
         truncation=True,
         return_tensors="pt",
     ).to("cuda")
-    
+
     with torch.no_grad():
         # T5の出力ベクトル (長文用)
         text_embeds_2 = pipe.text_encoder_2(text_inputs_2.input_ids)[0]
@@ -85,16 +76,42 @@ for i, text_prompt in enumerate(prompts):
         dtype=prompt_embeds.dtype,
     )
     prompt_embeds = torch.cat([prompt_embeds, padding], dim=-1)
-    
+
     # 最終的なプロンプト埋め込みベクトルの結合
     final_prompt_embeds = torch.cat([prompt_embeds, text_embeds_2], dim=1)
 
+    return final_prompt_embeds, pooled_prompt_embeds
+
+
+# ネガティブプロンプトは全シーン共通なので1回だけエンコードする
+negative_prompt_embeds, negative_pooled_prompt_embeds = encode_prompt(negative_prompt)
+
+
+with open(OUTDIR / "final_story.json", encoding="utf-8") as f:
+    story = json.load(f)
+
+prompts = []
+for scene in story["scenes"]:
+    prompts.append(scene["image_prompt"] + prompt_suffix)
+
+for i, text_prompt in enumerate(prompts):
+    file_name = f"image{i + 1}.png"
+
+    if (OUTDIR / file_name).exists():
+        print(f"skip (cached): {file_name}")
+        continue
+
+    final_prompt_embeds, pooled_prompt_embeds = encode_prompt(text_prompt)
+
     # ========================================================
-    # 4. 推論実行
+    # 推論実行(true_cfg_scale>1でネガティブプロンプトが有効になる)
     # ========================================================
     image = pipe(
         prompt_embeds=final_prompt_embeds,       # 結合した最終テキスト対応ベクトル
         pooled_prompt_embeds=pooled_prompt_embeds, # CLIP由来の768次元ベクトル
+        negative_prompt_embeds=negative_prompt_embeds,
+        negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
+        true_cfg_scale=3.5,
         height=1088,  # 16px単位制約のため1080ではなく1088で生成し、movie側で1080にクロップする
         width=1920,
         guidance_scale=3.5,
