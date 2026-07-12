@@ -26,8 +26,17 @@ for scene in story["scenes"]:
 WAN22_DIR = Path("/home/mowaki/roujin_home_senka/Wan2.2")
 WAN22_CKPT = Path("/data/models/wan2.2/Wan2.2-TI2V-5B")
 WAN22_SIZE = "1280*704"
+WAN22_FPS = 24
+WAN22_MAX_SECONDS = 5.0
+WAN22_SAMPLE_STEPS = 30
 
 motion_prompt_suffix = ",subtle natural motion,gentle breathing,slight breeze,cinemagraph,photorealistic,slow movement,NOT illustration,NOT anime,"
+
+def compute_frame_num(duration_sec: float) -> int:
+    # Wan2.2のVAE時間方向ストライドが4のため、frame_numは 4k+1 でなければならない
+    target = min(duration_sec, WAN22_MAX_SECONDS) * WAN22_FPS
+    n = round((target - 1) / 4) * 4 + 1
+    return max(25, min(121, n))
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:
     print(" ".join(cmd))
@@ -49,12 +58,13 @@ def get_duration(path: Path) -> float:
     )
     return float(r.stdout.strip())
 
-def generate_motion_clip(scene_no: int, image: Path, out: Path) -> None:
+def generate_motion_clip(scene_no: int, image: Path, out: Path, duration_sec: float) -> None:
     if out.exists():
         print(f"skip (cached): {out}")
         return
 
     prompt = IMAGE_PROMPTS[scene_no] + motion_prompt_suffix
+    frame_num = compute_frame_num(duration_sec)
 
     run([
         sys.executable, "generate.py",
@@ -63,6 +73,8 @@ def generate_motion_clip(scene_no: int, image: Path, out: Path) -> None:
         "--ckpt_dir", str(WAN22_CKPT),
         "--image", str(image.resolve()),
         "--prompt", prompt,
+        "--frame_num", str(frame_num),
+        "--sample_steps", str(WAN22_SAMPLE_STEPS),
         "--save_file", str(out.resolve()),
     ], cwd=WAN22_DIR)
 
@@ -82,9 +94,10 @@ def make_scene_video(scene_no: int) -> Path:
 
     duration = get_duration(voice)
 
-    # 1. Wan2.2で先頭~5秒だけ動きをつける(1280x704で生成、ffmpegで1920x1088にアップスケール)
+    # 1. Wan2.2で先頭~5秒(ナレーションがそれより短ければその長さ)だけ動きをつける
+    #    (1280x704で生成、ffmpegで1920x1088にアップスケール)
     motion_raw = VIDEO_DIR / f"motion{scene_no}_raw.mp4"
-    generate_motion_clip(scene_no, image, motion_raw)
+    generate_motion_clip(scene_no, image, motion_raw, duration)
 
     motion_scaled = VIDEO_DIR / f"motion{scene_no}_scaled.mp4"
     if not motion_scaled.exists():
