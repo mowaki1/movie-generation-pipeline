@@ -128,12 +128,22 @@ for i, text_prompt in enumerate(prompts):
     final_prompt_embeds, pooled_prompt_embeds = encode_prompt(text_prompt)
 
     # 推論実行(true_cfg_scale>1でネガティブプロンプトが有効になる)。
-    # 暗いシーン等でtrue_cfg_scale使用時にbf16でNaNが起き、
-    # 真っ黒な画像になることがあるため、検出したらネガティブプロンプト無しでリトライする。
+    # 暗いシーン等でtrue_cfg_scale使用時にbf16でNaNが起き、真っ黒な画像に
+    # なることがある。これはシード(乱数)依存で起きるため、まずはネガティブ
+    # プロンプトを保ったまま(=写実性を保ったまま)別のシードで数回リトライし、
+    # それでも黒いままの場合のみネガティブプロンプト無しにフォールバックする
+    # (ネガティブプロンプトにはillustration/anime等を弾く役割があるため、
+    # 外すとアニメ調に振れやすくなる副作用がある)。
     image = generate(final_prompt_embeds, pooled_prompt_embeds, use_negative_prompt=True)
 
+    retry = 0
+    while is_black(image) and retry < 2:
+        retry += 1
+        print(f"WARNING: {file_name} was black, retrying with negative prompt (seed retry {retry}/2)")
+        image = generate(final_prompt_embeds, pooled_prompt_embeds, use_negative_prompt=True)
+
     if is_black(image):
-        print(f"WARNING: {file_name} was black, retrying without negative prompt")
+        print(f"WARNING: {file_name} still black after seed retries, retrying without negative prompt")
         image = generate(final_prompt_embeds, pooled_prompt_embeds, use_negative_prompt=False)
 
     image.save(OUTDIR / file_name)
