@@ -7,4 +7,6 @@
 !/run_pipeline.py
 !/include/
 !/include/**
+!/titles/
+!/titles/**
 !/.gitignore
