@@ -1,0 +1,2 @@
+VIDEO_LENGTH = 40
+STEP = 5
