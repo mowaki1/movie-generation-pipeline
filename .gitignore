@@ -9,4 +9,6 @@
 !/include/**
 !/titles/
 !/titles/**
+!/news/
+!/news/**
 !/.gitignore
