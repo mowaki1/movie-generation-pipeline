@@ -1,8 +1,10 @@
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import feedparser
 import psycopg2
+import requests
 
 DB_DSN = "dbname=news_pipeline"
 
@@ -11,6 +13,20 @@ def get_sources(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT id, source, rss_url FROM m_sources WHERE id != 0")
         return cur.fetchall()
+
+
+def resolve_url(url):
+    # Google News RSSの<link>はリダイレクトトークン付きの中間URLなので、
+    # 実記事のURLに解決してから保存する(重複除去と後の本文取得を正しく機能させるため)
+    if urlparse(url).hostname != "news.google.com":
+        return url
+
+    try:
+        res = requests.get(url, allow_redirects=True, timeout=10)
+        return res.url
+    except requests.RequestException as e:
+        print(f"    WARNING: failed to resolve redirect for {url}: {e}")
+        return url
 
 
 def parse_published(entry):
@@ -31,13 +47,15 @@ def fetch_source(conn, source_id, source_name, rss_url):
     with conn.cursor() as cur:
         for entry in feed.entries:
             guid = entry.get("id") or entry.get("guid") or entry.get("link")
-            url = entry.get("link")
+            raw_url = entry.get("link")
             title = entry.get("title", "").strip()
             summary = entry.get("summary", "")
             published = parse_published(entry)
 
-            if not url or not title:
+            if not raw_url or not title:
                 continue
+
+            url = resolve_url(raw_url)
 
             cur.execute(
                 """
