@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 import feedparser
 import psycopg2
-import requests
+from googlenewsdecoder import new_decoderv1
 
 DB_DSN = "dbname=news_pipeline"
 
@@ -17,15 +17,20 @@ def get_sources(conn):
 
 def resolve_url(url):
     # Google News RSSの<link>はリダイレクトトークン付きの中間URLなので、
-    # 実記事のURLに解決してから保存する(重複除去と後の本文取得を正しく機能させるため)
+    # 実記事のURLに解決してから保存する(重複除去と後の本文取得を正しく機能させるため)。
+    # 単純なHTTPリダイレクト追跡では解決できない(トークンはbase64エンコードされた
+    # 内部IDでJS/専用エンドポイント経由のため)、専用ライブラリでデコードする。
     if urlparse(url).hostname != "news.google.com":
         return url
 
     try:
-        res = requests.get(url, allow_redirects=True, timeout=10)
-        return res.url
-    except requests.RequestException as e:
-        print(f"    WARNING: failed to resolve redirect for {url}: {e}")
+        result = new_decoderv1(url, interval=1)
+        if result.get("status"):
+            return result["decoded_url"]
+        print(f"    WARNING: failed to decode {url}: {result.get('message')}")
+        return url
+    except Exception as e:
+        print(f"    WARNING: failed to decode {url}: {e}")
         return url
 
 
@@ -51,6 +56,7 @@ def fetch_source(conn, source_id, source_name, rss_url):
             title = entry.get("title", "").strip()
             summary = entry.get("summary", "")
             published = parse_published(entry)
+            category = entry.get("category")
 
             if not raw_url or not title:
                 continue
@@ -60,11 +66,11 @@ def fetch_source(conn, source_id, source_name, rss_url):
             cur.execute(
                 """
                 INSERT INTO t_articles
-                    (source_id, rss_guid, title, url, published_at, rss_summary, status_id)
-                VALUES (%s, %s, %s, %s, %s, %s, 1)
+                    (source_id, rss_guid, title, url, published_at, rss_summary, category, status_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 1)
                 ON CONFLICT (url) DO NOTHING
                 """,
-                (source_id, guid, title, url, published, summary),
+                (source_id, guid, title, url, published, summary, category),
             )
             if cur.rowcount > 0:
                 inserted += 1
