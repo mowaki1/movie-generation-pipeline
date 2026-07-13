@@ -24,13 +24,24 @@ def get_existing_guids(conn, source_id):
         return {row[0] for row in cur.fetchall()}
 
 
-def resolve_url(url, max_retries=3):
+_google_blocked = False
+
+
+def resolve_url(url, max_retries=2):
     # Google News RSSの<link>はリダイレクトトークン付きの中間URLなので、
     # 実記事のURLに解決してから保存する(重複除去と後の本文取得を正しく機能させるため)。
     # 単純なHTTPリダイレクト追跡では解決できない(トークンはbase64エンコードされた
     # 内部IDでJS/専用エンドポイント経由のため)、専用ライブラリでデコードする。
+    global _google_blocked
+
     if urlparse(url).hostname != "news.google.com":
         return url
+
+    if _google_blocked:
+        # 一度429(レート制限)を検知したら、このプロセス実行中は
+        # Google側のブロックが解除されていないとみなし、以降は
+        # 待機せず即座にスキップする(1件ごとに待っても無駄なため)
+        return None
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -38,19 +49,27 @@ def resolve_url(url, max_retries=3):
             if result.get("status"):
                 return result["decoded_url"]
             message = result.get("message", "")
-            if "429" in str(message) and attempt < max_retries:
-                wait = 10 * attempt
-                print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
-                time.sleep(wait)
-                continue
+            if "429" in str(message):
+                if attempt < max_retries:
+                    wait = 10 * attempt
+                    print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
+                    time.sleep(wait)
+                    continue
+                print("    WARNING: still rate limited, skipping remaining Google News decodes for this run")
+                _google_blocked = True
+                return None
             print(f"    WARNING: failed to decode {url}: {message}")
             return None
         except Exception as e:
-            if "429" in str(e) and attempt < max_retries:
-                wait = 10 * attempt
-                print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
-                time.sleep(wait)
-                continue
+            if "429" in str(e):
+                if attempt < max_retries:
+                    wait = 10 * attempt
+                    print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
+                    time.sleep(wait)
+                    continue
+                print("    WARNING: still rate limited, skipping remaining Google News decodes for this run")
+                _google_blocked = True
+                return None
             print(f"    WARNING: failed to decode {url}: {e}")
             return None
     return None
