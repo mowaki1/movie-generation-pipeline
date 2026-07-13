@@ -60,7 +60,7 @@ def ask_genre(title, body):
             "temperature": 0.0,
             "top_p": 0.9,
             "num_ctx": 8192,
-            "num_predict": 16,
+            "num_predict": 64,
         },
     }
     res = requests.post(API_URL, json=payload, timeout=300)
@@ -69,9 +69,12 @@ def ask_genre(title, body):
 
     match = re.search(r"\d+", text)
     if not match:
+        print(f"  DEBUG: raw response was: {text!r}")
         return None
 
     genre_id = int(match.group())
+    if genre_id not in GENRES:
+        print(f"  DEBUG: parsed number {genre_id} is not a valid genre id, raw response was: {text!r}")
     return genre_id if genre_id in GENRES else None
 
 
