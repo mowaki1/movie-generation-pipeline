@@ -11,4 +11,6 @@
 !/titles/**
 !/news/
 !/news/**
+/news/__pycache__/
+/news/batch.log
 !/.gitignore
