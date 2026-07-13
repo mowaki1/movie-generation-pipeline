@@ -26,6 +26,8 @@ def get_existing_guids(conn, source_id):
 
 _google_blocked = False
 
+GOOGLE_FETCH_INTERVAL = 5  # 1件デコードするごとに空けるsleep秒数(Googleのレート制限回避用)
+
 
 def resolve_url(url, max_retries=2):
     # Google News RSSの<link>はリダイレクトトークン付きの中間URLなので、
@@ -43,36 +45,42 @@ def resolve_url(url, max_retries=2):
         # 待機せず即座にスキップする(1件ごとに待っても無駄なため)
         return None
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            result = new_decoderv1(url, interval=2)
-            if result.get("status"):
-                return result["decoded_url"]
-            message = result.get("message", "")
-            if "429" in str(message):
-                if attempt < max_retries:
-                    wait = 10 * attempt
-                    print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
-                    time.sleep(wait)
-                    continue
-                print("    WARNING: still rate limited, skipping remaining Google News decodes for this run")
-                _google_blocked = True
+    try:
+        for attempt in range(1, max_retries + 1):
+            try:
+                result = new_decoderv1(url, interval=2)
+                if result.get("status"):
+                    return result["decoded_url"]
+                message = result.get("message", "")
+                if "429" in str(message):
+                    if attempt < max_retries:
+                        wait = 10 * attempt
+                        print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
+                        time.sleep(wait)
+                        continue
+                    print("    WARNING: still rate limited, skipping remaining Google News decodes for this run")
+                    _google_blocked = True
+                    return None
+                print(f"    WARNING: failed to decode {url}: {message}")
                 return None
-            print(f"    WARNING: failed to decode {url}: {message}")
-            return None
-        except Exception as e:
-            if "429" in str(e):
-                if attempt < max_retries:
-                    wait = 10 * attempt
-                    print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
-                    time.sleep(wait)
-                    continue
-                print("    WARNING: still rate limited, skipping remaining Google News decodes for this run")
-                _google_blocked = True
+            except Exception as e:
+                if "429" in str(e):
+                    if attempt < max_retries:
+                        wait = 10 * attempt
+                        print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
+                        time.sleep(wait)
+                        continue
+                    print("    WARNING: still rate limited, skipping remaining Google News decodes for this run")
+                    _google_blocked = True
+                    return None
+                print(f"    WARNING: failed to decode {url}: {e}")
                 return None
-            print(f"    WARNING: failed to decode {url}: {e}")
-            return None
-    return None
+        return None
+    finally:
+        # ブロック済みでない限り、1件処理するごとに一定間隔を空けて
+        # 立て続けにGoogleへリクエストを送らないようにする
+        if not _google_blocked:
+            time.sleep(GOOGLE_FETCH_INTERVAL)
 
 
 def parse_published(entry):
