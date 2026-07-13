@@ -56,11 +56,12 @@ def ask_genre(title, body):
         "model": MODEL,
         "prompt": build_prompt(title, body),
         "stream": False,
+        "think": False,
         "options": {
             "temperature": 0.0,
             "top_p": 0.9,
             "num_ctx": 8192,
-            "num_predict": 64,
+            "num_predict": 200,
         },
     }
     res = requests.post(API_URL, json=payload, timeout=300)
@@ -69,7 +70,9 @@ def ask_genre(title, body):
     if "error" in data:
         print(f"  DEBUG: Ollama returned an error: {data['error']!r}")
         return None
-    text = data.get("response", "").strip()
+    # eval_count>0なのにresponseが空の場合、生成トークンが全て内部の思考(thinking)
+    # 過程に消費されている可能性が高いため、そちらも数字探索の対象にする
+    text = (data.get("response", "") + " " + data.get("thinking", "")).strip()
 
     match = re.search(r"\d+", text)
     if not match:
