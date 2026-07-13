@@ -1,7 +1,6 @@
 ﻿visual_text = ask(
     visual_prompt,
     filename=f"visual_{scene_no:03d}.json",
-    json_mode=True,
     num_predict=1024,
 )
 

@@ -1,5 +1,8 @@
 ﻿
-def ask(prompt, filename=None, json_mode=False, num_predict=4096):
+def ask(prompt, filename=None, num_predict=4096):
+    # 注意: "format": "json" (文法制約付きデコーディング)はgemma4:31b-it-bf16で
+    # 出力が"own own own..."のように壊れる不具合があるため使用しない。
+    # プロンプト側の指示とrepair_json_array/safe_json_loadsのフェンス除去で代替する。
     payload = {
         "model": MODEL,
         "prompt": prompt,
@@ -11,9 +14,6 @@ def ask(prompt, filename=None, json_mode=False, num_predict=4096):
             "num_predict": num_predict,
         },
     }
-
-    if json_mode:
-        payload["format"] = "json"
 
     for _ in range(3):
         res = requests.post(API_URL, json=payload, timeout=3000)
@@ -67,9 +67,16 @@ def extract_json_array(text):
 
     raise ValueError("JSON配列またはscenesが見つかりません")
 
+def strip_code_fence(text):
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text)
+    return text.strip()
+
 def safe_json_loads(text, fallback):
     try:
-        return json.loads(text)
+        return json.loads(strip_code_fence(text))
     except json.JSONDecodeError:
         return fallback
 

@@ -3,14 +3,19 @@ import json
 import time
 import re
 import sys
+import subprocess
+import atexit
 from pathlib import Path
 
 args = sys.argv
 
-MODEL = "gemma4:e4b"
+MODEL = "gemma4:31b-it-bf16"
 API_URL = "http://localhost:11434/api/generate"
 #MOVIE_THEME = "面会ゼロだった老人に起きた大逆転"
 MOVIE_THEME = args[3]
+
+# 後続工程(FLUX/Wan2.2/LTX)がVRAMを使えるよう、終了時にOllamaのモデルを明示的にアンロードする
+atexit.register(lambda: subprocess.run(["ollama", "stop", MODEL], check=False))
 
 INCLUDE_PATH = Path("include")
 
@@ -36,7 +41,6 @@ with open(INCLUDE_PATH / f"design_prompt_{args[1]}.py", "r", encoding="utf-8") a
 design_text = ask(
     design_prompt,
     filename="01_design.json",
-    json_mode=True,
     num_predict=4096,
 )
 
@@ -50,7 +54,7 @@ print(json.dumps(design_json, ensure_ascii=False, indent=2))
 if "story_structure" not in design_json:
     print("ERROR: story_structure がありません")
     print(design_text)
-    raise SystemExit
+    raise SystemExit(1)
     
 # Character Bible生成
 character_bible = build_character_bible(design_json)
@@ -100,7 +104,6 @@ for start in range(1, VIDEO_LENGTH + 1, 5):
     text = ask(
         narration_prompt,
         filename=f"03_narration_{start:03d}_{end:03d}_raw.json",
-        json_mode=False,
         num_predict=4096,
     )
     try:
@@ -108,7 +111,7 @@ for start in range(1, VIDEO_LENGTH + 1, 5):
     except Exception as e:
         print(f"narration parse failed {start}-{end}: {e}")
         print(text)
-        raise SystemExit
+        raise SystemExit(1)
 
     for item in part:
         if "scene_no" in item and "narration" in item:
