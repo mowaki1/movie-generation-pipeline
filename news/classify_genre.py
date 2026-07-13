@@ -73,7 +73,12 @@ def ask_genre(title, body):
 
     match = re.search(r"\d+", text)
     if not match:
-        print(f"  DEBUG: raw response was: {text!r}, full payload keys: {list(data.keys())}")
+        print(
+            f"  DEBUG: raw response was: {text!r}, "
+            f"done_reason={data.get('done_reason')!r}, "
+            f"eval_count={data.get('eval_count')}, "
+            f"prompt_eval_count={data.get('prompt_eval_count')}"
+        )
         return None
 
     genre_id = int(match.group())
