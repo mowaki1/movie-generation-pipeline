@@ -4,17 +4,18 @@ from pathlib import Path
 
 args = sys.argv
 
-if len(args) < 3:
-    print(f"usage: python {Path(args[0]).name} <pipeline_no> <theme>")
+if len(args) < 4:
+    print(f"usage: python {Path(args[0]).name} <variant_id> <pipeline_no> <theme>")
     raise SystemExit(1)
 
-pipeline_no = args[1]
-theme = args[2]
+variant_id = args[1]
+pipeline_no = args[2]
+theme = args[3]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 STEPS = [
-    ["generate_story6.py", pipeline_no, theme],
+    ["generate_story7.py", variant_id, pipeline_no, theme],
     ["generate_images2.py", pipeline_no],
     ["generate_voices3.py", pipeline_no],
     ["generate_movie4.py", pipeline_no],
