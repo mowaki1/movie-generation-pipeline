@@ -1,13 +1,13 @@
 import psycopg2
-import requests
+from sentence_transformers import SentenceTransformer
 
 DB_DSN = "dbname=news_pipeline"
 
-MODEL = "bge-m3"
-API_URL = "http://localhost:11434/api/embed"
 EMBEDDING_MODEL_ID = 1  # m_embedding_models: BAAI/bge-m3, 1024次元
 
 BODY_CHARS_LIMIT = 4000
+
+model = SentenceTransformer("BAAI/bge-m3")
 
 
 def get_pending_articles(conn, limit):
@@ -20,17 +20,8 @@ def get_pending_articles(conn, limit):
 
 
 def embed_text(text):
-    payload = {"model": MODEL, "input": text}
-    res = requests.post(API_URL, json=payload, timeout=120)
-    res.raise_for_status()
-    data = res.json()
-    if "error" in data:
-        raise RuntimeError(data["error"])
-
-    embeddings = data.get("embeddings")
-    if not embeddings:
-        raise RuntimeError(f"no embeddings in response: {data}")
-    return embeddings[0]
+    # コサイン類似度検索(t_embeddingsのHNSW索引がvector_cosine_ops)を使うため正規化する
+    return model.encode(text, normalize_embeddings=True).tolist()
 
 
 def save_embedding(conn, article_id, embedding):
