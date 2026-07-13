@@ -20,22 +20,22 @@ atexit.register(lambda: subprocess.run(["ollama", "stop", MODEL], check=False))
 INCLUDE_PATH = Path("include")
 
 # 変数群のpy
-with open(INCLUDE_PATH / f"variables_{args[1]}.py", "r", encoding="utf-8") as f:
+with open(INCLUDE_PATH / f"variables_{args[1]}.py", "r", encoding="utf-8-sig") as f:
     exec(f.read())
 
 OUTDIR = Path(f"jobs/story_pipeline{args[2]}")
 OUTDIR.mkdir(parents=True, exist_ok=True)
 
 # 関数群のpy
-with open(INCLUDE_PATH / "functions.py", "r", encoding="utf-8") as f:
+with open(INCLUDE_PATH / "functions.py", "r", encoding="utf-8-sig") as f:
     exec(f.read())
 
 # BASEのpy
-with open(INCLUDE_PATH / f"base_{args[1]}.py", "r", encoding="utf-8") as f:
+with open(INCLUDE_PATH / f"base_{args[1]}.py", "r", encoding="utf-8-sig") as f:
     exec(f.read())
 
 # design_promptのpy
-with open(INCLUDE_PATH / f"design_prompt_{args[1]}.py", "r", encoding="utf-8") as f:
+with open(INCLUDE_PATH / f"design_prompt_{args[1]}.py", "r", encoding="utf-8-sig") as f:
     exec(f.read())
 
 design_text = ask(
@@ -65,7 +65,7 @@ character_bible = build_character_bible(design_json)
 )
 
 # outline_logicのpy
-with open(INCLUDE_PATH / f"outline_{args[1]}.py", "r", encoding="utf-8") as f:
+with open(INCLUDE_PATH / f"outline_{args[1]}.py", "r", encoding="utf-8-sig") as f:
     exec(f.read())
 
 outline = sorted(outline, key=lambda x: x["scene_no"])
@@ -97,7 +97,7 @@ for start in range(1, VIDEO_LENGTH + 1, 5):
         continue
 
     # narration_promptのpy
-    with open(INCLUDE_PATH / f"narration_prompt_{args[1]}.py", "r", encoding="utf-8") as f:
+    with open(INCLUDE_PATH / f"narration_prompt_{args[1]}.py", "r", encoding="utf-8-sig") as f:
         exec(f.read())
 
 
@@ -145,11 +145,11 @@ for scene in narration_scenes:
     narration_text = scene["narration"]
 
     # visual_promptのpy
-    with open(INCLUDE_PATH / f"visual_prompt_{args[1]}.py", "r", encoding="utf-8") as f:
+    with open(INCLUDE_PATH / f"visual_prompt_{args[1]}.py", "r", encoding="utf-8-sig") as f:
         exec(f.read())
 
     # visual_logicのpy
-    with open(INCLUDE_PATH / f"visual_logic_{args[1]}.py", "r", encoding="utf-8") as f:
+    with open(INCLUDE_PATH / f"visual_logic_{args[1]}.py", "r", encoding="utf-8-sig") as f:
         exec(f.read())
 
 
