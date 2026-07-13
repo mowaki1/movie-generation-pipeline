@@ -15,7 +15,16 @@ def get_sources(conn):
         return cur.fetchall()
 
 
-def resolve_url(url):
+def get_existing_guids(conn, source_id):
+    # Google Newsの検索RSSは前回取得分と大きく重複するので、
+    # 既知のguidはデコードをスキップして無駄なGoogleへのリクエストを減らす
+    # (これをしないと日次バッチのたびに同じ記事を再デコードし、429を誘発しやすくなる)
+    with conn.cursor() as cur:
+        cur.execute("SELECT rss_guid FROM t_articles WHERE source_id = %s", (source_id,))
+        return {row[0] for row in cur.fetchall()}
+
+
+def resolve_url(url, max_retries=3):
     # Google News RSSの<link>はリダイレクトトークン付きの中間URLなので、
     # 実記事のURLに解決してから保存する(重複除去と後の本文取得を正しく機能させるため)。
     # 単純なHTTPリダイレクト追跡では解決できない(トークンはbase64エンコードされた
@@ -23,15 +32,28 @@ def resolve_url(url):
     if urlparse(url).hostname != "news.google.com":
         return url
 
-    try:
-        result = new_decoderv1(url, interval=1)
-        if result.get("status"):
-            return result["decoded_url"]
-        print(f"    WARNING: failed to decode {url}: {result.get('message')}")
-        return url
-    except Exception as e:
-        print(f"    WARNING: failed to decode {url}: {e}")
-        return url
+    for attempt in range(1, max_retries + 1):
+        try:
+            result = new_decoderv1(url, interval=2)
+            if result.get("status"):
+                return result["decoded_url"]
+            message = result.get("message", "")
+            if "429" in str(message) and attempt < max_retries:
+                wait = 10 * attempt
+                print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
+                time.sleep(wait)
+                continue
+            print(f"    WARNING: failed to decode {url}: {message}")
+            return None
+        except Exception as e:
+            if "429" in str(e) and attempt < max_retries:
+                wait = 10 * attempt
+                print(f"    WARNING: rate limited, retrying in {wait}s ({attempt}/{max_retries})")
+                time.sleep(wait)
+                continue
+            print(f"    WARNING: failed to decode {url}: {e}")
+            return None
+    return None
 
 
 def parse_published(entry):
@@ -48,7 +70,10 @@ def fetch_source(conn, source_id, source_name, rss_url):
         print(f"  ERROR: failed to parse feed: {feed.bozo_exception}")
         return 0
 
+    existing_guids = get_existing_guids(conn, source_id)
+
     inserted = 0
+    skipped_decode_failures = 0
     with conn.cursor() as cur:
         for entry in feed.entries:
             guid = entry.get("id") or entry.get("guid") or entry.get("link")
@@ -60,15 +85,22 @@ def fetch_source(conn, source_id, source_name, rss_url):
 
             if not raw_url or not title:
                 continue
+            if guid in existing_guids:
+                continue
 
             url = resolve_url(raw_url)
+            if url is None:
+                # デコードに失敗した記事はスキップする(未挿入のままにしておけば
+                # 次回のバッチ実行時にあらためて解決を試みられる)
+                skipped_decode_failures += 1
+                continue
 
             cur.execute(
                 """
                 INSERT INTO t_articles
                     (source_id, rss_guid, title, url, published_at, rss_summary, category, status_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, 1)
-                ON CONFLICT (url) DO NOTHING
+                ON CONFLICT DO NOTHING
                 """,
                 (source_id, guid, title, url, published, summary, category),
             )
@@ -76,7 +108,7 @@ def fetch_source(conn, source_id, source_name, rss_url):
                 inserted += 1
 
     conn.commit()
-    print(f"  inserted: {inserted} / {len(feed.entries)}")
+    print(f"  inserted: {inserted} / {len(feed.entries)} (decode failures skipped: {skipped_decode_failures})")
     return inserted
 
 
