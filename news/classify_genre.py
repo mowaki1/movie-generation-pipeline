@@ -65,11 +65,15 @@ def ask_genre(title, body):
     }
     res = requests.post(API_URL, json=payload, timeout=300)
     res.raise_for_status()
-    text = res.json().get("response", "").strip()
+    data = res.json()
+    if "error" in data:
+        print(f"  DEBUG: Ollama returned an error: {data['error']!r}")
+        return None
+    text = data.get("response", "").strip()
 
     match = re.search(r"\d+", text)
     if not match:
-        print(f"  DEBUG: raw response was: {text!r}")
+        print(f"  DEBUG: raw response was: {text!r}, full payload keys: {list(data.keys())}")
         return None
 
     genre_id = int(match.group())
