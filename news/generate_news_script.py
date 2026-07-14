@@ -1,6 +1,8 @@
+import atexit
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,6 +13,9 @@ DB_DSN = "dbname=news_pipeline"
 
 MODEL = "gemma4:31b-it-bf16"
 OLLAMA_URL = "http://localhost:11434/api/generate"
+
+# 後続工程(FLUX/LTX)がVRAMを使えるよう、終了時にOllamaのモデルを明示的にアンロードする
+atexit.register(lambda: subprocess.run(["ollama", "stop", MODEL], check=False))
 
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
 TAVILY_URL = "https://api.tavily.com/search"
