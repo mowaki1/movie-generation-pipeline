@@ -5,6 +5,7 @@
 !/generate_voices3.py
 !/generate_movie4.py
 !/run_pipeline.py
+!/run_news_pipeline.py
 !/include/
 !/include/**
 !/titles/
