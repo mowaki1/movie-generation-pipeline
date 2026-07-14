@@ -89,7 +89,7 @@ def select_article(conn, genre_id):
         cur.execute(
             """
             SELECT id, title, summary FROM t_articles
-            WHERE genre_id = %s AND status_id >= 8
+            WHERE genre_id = %s AND status_id = 8
             ORDER BY published_at DESC
             LIMIT %s
             """,
@@ -118,6 +118,15 @@ def get_article(conn, article_id):
             (article_id,),
         )
         return cur.fetchone()
+
+
+def mark_video_generated(conn, article_id):
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE t_articles SET status_id = 9 WHERE id = %s",
+            (article_id,),
+        )
+    conn.commit()
 
 
 def find_related_articles(conn, article_id, limit=RELATED_ARTICLES_LIMIT):
@@ -278,8 +287,9 @@ def main():
         encoding="utf-8",
     )
 
+    mark_video_generated(conn, article_id)
     conn.close()
-    print(f"done: {outdir / 'final_story.json'}")
+    print(f"done: {outdir / 'final_story.json'} (article id={article_id} marked status_id=9)")
 
 
 if __name__ == "__main__":
