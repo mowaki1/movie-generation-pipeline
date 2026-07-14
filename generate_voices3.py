@@ -108,7 +108,7 @@ def sec_to_srt(sec):
 
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
     
-def split_subtitles(text, max_chars=18):
+def split_subtitles(text, max_chars=24):
     parts = re.split(r'(?<=[。！？])', text)
     result = []
 
@@ -199,7 +199,7 @@ def main() -> None:
             start = current_time
             end = start + duration
 
-            ass_text = wrap_ass(subtitle, 18)
+            ass_text = wrap_ass(subtitle, 24)
 
             ass_lines.append(
                 "Dialogue: 0,"
