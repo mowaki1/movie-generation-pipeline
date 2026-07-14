@@ -38,6 +38,7 @@ RELATED_ARTICLES_LIMIT = 5
 WEB_SEARCH_RESULTS = 5
 TARGET_SCENES = 12
 BODY_CHARS_LIMIT = 2000
+DUPLICATE_DISTANCE_THRESHOLD = 0.15  # コサイン距離。これ未満は「ほぼ同じ出来事の記事」とみなす
 
 
 def ask_ollama(prompt, num_predict=4096, temperature=0.3):
@@ -127,6 +128,32 @@ def mark_video_generated(conn, article_id):
             (article_id,),
         )
     conn.commit()
+
+
+def mark_duplicate_articles(conn, article_id, max_distance=DUPLICATE_DISTANCE_THRESHOLD):
+    # 別ソースが同じ出来事を報じているだけの記事(コサイン距離が極めて小さい)を
+    # 「この動画でカバー済み」として一緒にstatus_id=9にし、将来再選定されるのを防ぐ
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE t_articles
+            SET status_id = 9
+            WHERE status_id = 8
+              AND id != %s
+              AND id IN (
+                SELECT e.article_id
+                FROM t_embeddings e
+                WHERE e.embedding_model_id = 1
+                  AND e.embedding <=> (
+                    SELECT embedding FROM t_embeddings
+                    WHERE article_id = %s AND embedding_model_id = 1
+                  ) < %s
+              )
+            RETURNING id, title
+            """,
+            (article_id, article_id, max_distance),
+        )
+        return cur.fetchall()
 
 
 def find_related_articles(conn, article_id, limit=RELATED_ARTICLES_LIMIT):
@@ -288,8 +315,15 @@ def main():
     )
 
     mark_video_generated(conn, article_id)
+    duplicates = mark_duplicate_articles(conn, article_id)
+    for dup_id, dup_title in duplicates:
+        print(f"  duplicate covered: id={dup_id} {dup_title}")
+
     conn.close()
-    print(f"done: {outdir / 'final_story.json'} (article id={article_id} marked status_id=9)")
+    print(
+        f"done: {outdir / 'final_story.json'} "
+        f"(article id={article_id} + {len(duplicates)} duplicates marked status_id=9)"
+    )
 
 
 if __name__ == "__main__":
