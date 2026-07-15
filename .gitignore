@@ -6,6 +6,7 @@
 !/generate_movie4.py
 !/run_pipeline.py
 !/run_news_pipeline.py
+!/create_tables_video.sql
 !/include/
 !/include/**
 !/titles/
