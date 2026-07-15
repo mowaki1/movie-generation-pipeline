@@ -45,10 +45,16 @@ def _instrumented_vae_decode(z, *args, **kwargs):
 
     out_has_nan = bool(torch.isnan(sample).any() or torch.isinf(sample).any())
     out_max_abs = sample.abs().max().item()
+    out_mean = sample.mean().item()
+    out_std = sample.std().item()
+    # (x/2+0.5).clamp(0,1)後の実際のピクセル値がどれだけ真っ黒(0付近)に
+    # 張り付いているかを見る(image_processor.postprocess相当の簡易チェック)
+    frac_near_black = (sample.float() < -0.9).float().mean().item()
 
     print(
         f"  DIAGNOSTIC: vae_decode input(has_nan={in_has_nan}, max_abs={in_max_abs:.4f}) "
-        f"-> output(has_nan={out_has_nan}, max_abs={out_max_abs:.4f})"
+        f"-> output(has_nan={out_has_nan}, max_abs={out_max_abs:.4f}, "
+        f"mean={out_mean:.4f}, std={out_std:.4f}, frac_near_black={frac_near_black:.4f})"
     )
 
     return result
