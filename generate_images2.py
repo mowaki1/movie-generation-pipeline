@@ -31,37 +31,6 @@ pipe.to("cuda")
 pipe.vae.enable_slicing()
 pipe.vae.enable_tiling()
 
-# 診断用: denoisingループ内のcallbackではVAEデコード処理そのものを監視できないため、
-# vae.decode()自体をラップして入出力の異常値(NaN/Inf)を確認する
-_original_vae_decode = pipe.vae.decode
-
-
-def _instrumented_vae_decode(z, *args, **kwargs):
-    in_has_nan = bool(torch.isnan(z).any() or torch.isinf(z).any())
-    in_max_abs = z.abs().max().item()
-
-    result = _original_vae_decode(z, *args, **kwargs)
-    sample = result.sample if hasattr(result, "sample") else result[0]
-
-    out_has_nan = bool(torch.isnan(sample).any() or torch.isinf(sample).any())
-    out_max_abs = sample.abs().max().item()
-    out_mean = sample.mean().item()
-    out_std = sample.std().item()
-    # (x/2+0.5).clamp(0,1)後の実際のピクセル値がどれだけ真っ黒(0付近)に
-    # 張り付いているかを見る(image_processor.postprocess相当の簡易チェック)
-    frac_near_black = (sample.float() < -0.9).float().mean().item()
-
-    print(
-        f"  DIAGNOSTIC: vae_decode input(has_nan={in_has_nan}, max_abs={in_max_abs:.4f}) "
-        f"-> output(has_nan={out_has_nan}, max_abs={out_max_abs:.4f}, "
-        f"mean={out_mean:.4f}, std={out_std:.4f}, frac_near_black={frac_near_black:.4f})"
-    )
-
-    return result
-
-
-pipe.vae.decode = _instrumented_vae_decode
-
 
 def encode_prompt(text_prompt):
     # ========================================================
@@ -119,30 +88,6 @@ def is_black(image) -> bool:
     return np.array(image.convert("L")).mean() < 5
 
 
-def make_diagnostic_callback():
-    # 黒画像の原因(どのステップで潜在変数が異常な値になるか)を特定するための
-    # 一時的な診断用コールバック。各denoisingステップ終了時に潜在変数を検査する。
-    state = {"first_nan_step": None, "max_abs": 0.0}
-
-    def callback(pipe, step_index, timestep, callback_kwargs):
-        latents = callback_kwargs["latents"]
-        abs_max = latents.abs().max().item()
-        state["max_abs"] = max(state["max_abs"], abs_max)
-
-        if state["first_nan_step"] is None and (
-            torch.isnan(latents).any() or torch.isinf(latents).any()
-        ):
-            state["first_nan_step"] = step_index
-            print(
-                f"  DIAGNOSTIC: NaN/Inf first appeared at step={step_index} "
-                f"timestep={timestep} max_abs_so_far={abs_max:.4f}"
-            )
-
-        return callback_kwargs
-
-    return callback, state
-
-
 def generate(prompt_embeds, pooled_prompt_embeds, use_negative_prompt: bool):
     kwargs = {}
     if use_negative_prompt:
@@ -150,9 +95,7 @@ def generate(prompt_embeds, pooled_prompt_embeds, use_negative_prompt: bool):
         kwargs["negative_pooled_prompt_embeds"] = negative_pooled_prompt_embeds
         kwargs["true_cfg_scale"] = 1.5
 
-    callback, state = make_diagnostic_callback()
-
-    image = pipe(
+    return pipe(
         prompt_embeds=prompt_embeds,       # 結合した最終テキスト対応ベクトル
         pooled_prompt_embeds=pooled_prompt_embeds, # CLIP由来の768次元ベクトル
         height=1088,  # 16px単位制約のため1080ではなく1088で生成し、movie側で1080にクロップする
@@ -160,17 +103,8 @@ def generate(prompt_embeds, pooled_prompt_embeds, use_negative_prompt: bool):
         guidance_scale=3.5,
         num_inference_steps=50,
         max_sequence_length=512,
-        callback_on_step_end=callback,
-        callback_on_step_end_tensor_inputs=["latents"],
         **kwargs,
     ).images[0]
-
-    print(
-        f"  DIAGNOSTIC: max_abs_latent={state['max_abs']:.4f}, "
-        f"first_nan_step={state['first_nan_step']}, use_negative_prompt={use_negative_prompt}"
-    )
-
-    return image
 
 
 # ネガティブプロンプトは全シーン共通なので1回だけエンコードする
