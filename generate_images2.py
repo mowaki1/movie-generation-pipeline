@@ -148,7 +148,7 @@ def generate(prompt_embeds, pooled_prompt_embeds, use_negative_prompt: bool):
     if use_negative_prompt:
         kwargs["negative_prompt_embeds"] = negative_prompt_embeds
         kwargs["negative_pooled_prompt_embeds"] = negative_pooled_prompt_embeds
-        kwargs["true_cfg_scale"] = 3.5
+        kwargs["true_cfg_scale"] = 1.5
 
     callback, state = make_diagnostic_callback()
 
@@ -194,12 +194,15 @@ for i, text_prompt in enumerate(prompts):
     final_prompt_embeds, pooled_prompt_embeds = encode_prompt(text_prompt)
 
     # 推論実行(true_cfg_scale>1でネガティブプロンプトが有効になる)。
-    # 暗いシーン等でtrue_cfg_scale使用時にbf16でNaNが起き、真っ黒な画像に
-    # なることがある。これはシード(乱数)依存で起きるため、まずはネガティブ
-    # プロンプトを保ったまま(=写実性を保ったまま)別のシードで数回リトライし、
-    # それでも黒いままの場合のみネガティブプロンプト無しにフォールバックする
-    # (ネガティブプロンプトにはillustration/anime等を弾く役割があるため、
-    # 外すとアニメ調に振れやすくなる副作用がある)。
+    # 診断の結果、黒画像はNaN/数値誤差ではなく、FLUX.1-dev(guidance-distilled
+    # モデル)にtrue_cfg_scaleで本物のCFG外挿をかけた際、特定のシードで
+    # 潜在変数が学習分布から外れ、VAEデコード後に標準偏差ほぼ0の均一な黒へ
+    # 縮退する現象と判明した(true_cfg_scaleを3.5→1.5に下げて緩和済み)。
+    # それでも起き得るため、まずはネガティブプロンプトを保ったまま(=写実性を
+    # 保ったまま)別のシードで数回リトライし、それでも黒いままの場合のみ
+    # ネガティブプロンプト無しにフォールバックする(ネガティブプロンプトには
+    # illustration/anime等を弾く役割があるため、外すとアニメ調に振れやすく
+    # なる副作用がある)。
     image = generate(final_prompt_embeds, pooled_prompt_embeds, use_negative_prompt=True)
 
     retry = 0
