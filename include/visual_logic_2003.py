@@ -36,6 +36,9 @@ for c in active_characters:
         f'{c["name"]}, {c["appearance"]}'
     )
 
+for c in active_characters:
+    motion_prompt = motion_prompt.replace(c["name"], f'{c["name"]} ({c["appearance"]})')
+
 prefix = CONTEMPORARY_PREFIX
 
 if appearance_prefix:

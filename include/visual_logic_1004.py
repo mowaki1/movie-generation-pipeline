@@ -1,4 +1,4 @@
-﻿visual_text = ask(
+visual_text = ask(
     visual_prompt,
     filename=f"visual_{scene_no:03d}.json",
     num_predict=1024,
@@ -27,6 +27,9 @@ for c in active_characters:
     appearance_prefix.append(
         f'{c["name"]}, {c["appearance"]}'
     )
+
+for c in active_characters:
+    motion_prompt = motion_prompt.replace(c["name"], f'{c["name"]} ({c["appearance"]})')
 
 if appearance_prefix:
     image_prompt = ", ".join(appearance_prefix) + ", " + image_prompt
