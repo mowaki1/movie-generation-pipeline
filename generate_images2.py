@@ -88,6 +88,30 @@ def is_black(image) -> bool:
     return np.array(image.convert("L")).mean() < 5
 
 
+def make_diagnostic_callback():
+    # 黒画像の原因(どのステップで潜在変数が異常な値になるか)を特定するための
+    # 一時的な診断用コールバック。各denoisingステップ終了時に潜在変数を検査する。
+    state = {"first_nan_step": None, "max_abs": 0.0}
+
+    def callback(pipe, step_index, timestep, callback_kwargs):
+        latents = callback_kwargs["latents"]
+        abs_max = latents.abs().max().item()
+        state["max_abs"] = max(state["max_abs"], abs_max)
+
+        if state["first_nan_step"] is None and (
+            torch.isnan(latents).any() or torch.isinf(latents).any()
+        ):
+            state["first_nan_step"] = step_index
+            print(
+                f"  DIAGNOSTIC: NaN/Inf first appeared at step={step_index} "
+                f"timestep={timestep} max_abs_so_far={abs_max:.4f}"
+            )
+
+        return callback_kwargs
+
+    return callback, state
+
+
 def generate(prompt_embeds, pooled_prompt_embeds, use_negative_prompt: bool):
     kwargs = {}
     if use_negative_prompt:
@@ -95,7 +119,9 @@ def generate(prompt_embeds, pooled_prompt_embeds, use_negative_prompt: bool):
         kwargs["negative_pooled_prompt_embeds"] = negative_pooled_prompt_embeds
         kwargs["true_cfg_scale"] = 3.5
 
-    return pipe(
+    callback, state = make_diagnostic_callback()
+
+    image = pipe(
         prompt_embeds=prompt_embeds,       # 結合した最終テキスト対応ベクトル
         pooled_prompt_embeds=pooled_prompt_embeds, # CLIP由来の768次元ベクトル
         height=1088,  # 16px単位制約のため1080ではなく1088で生成し、movie側で1080にクロップする
@@ -103,8 +129,17 @@ def generate(prompt_embeds, pooled_prompt_embeds, use_negative_prompt: bool):
         guidance_scale=3.5,
         num_inference_steps=50,
         max_sequence_length=512,
+        callback_on_step_end=callback,
+        callback_on_step_end_tensor_inputs=["latents"],
         **kwargs,
     ).images[0]
+
+    print(
+        f"  DIAGNOSTIC: max_abs_latent={state['max_abs']:.4f}, "
+        f"first_nan_step={state['first_nan_step']}, use_negative_prompt={use_negative_prompt}"
+    )
+
+    return image
 
 
 # ネガティブプロンプトは全シーン共通なので1回だけエンコードする
