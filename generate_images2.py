@@ -31,6 +31,31 @@ pipe.to("cuda")
 pipe.vae.enable_slicing()
 pipe.vae.enable_tiling()
 
+# 診断用: denoisingループ内のcallbackではVAEデコード処理そのものを監視できないため、
+# vae.decode()自体をラップして入出力の異常値(NaN/Inf)を確認する
+_original_vae_decode = pipe.vae.decode
+
+
+def _instrumented_vae_decode(z, *args, **kwargs):
+    in_has_nan = bool(torch.isnan(z).any() or torch.isinf(z).any())
+    in_max_abs = z.abs().max().item()
+
+    result = _original_vae_decode(z, *args, **kwargs)
+    sample = result.sample if hasattr(result, "sample") else result[0]
+
+    out_has_nan = bool(torch.isnan(sample).any() or torch.isinf(sample).any())
+    out_max_abs = sample.abs().max().item()
+
+    print(
+        f"  DIAGNOSTIC: vae_decode input(has_nan={in_has_nan}, max_abs={in_max_abs:.4f}) "
+        f"-> output(has_nan={out_has_nan}, max_abs={out_max_abs:.4f})"
+    )
+
+    return result
+
+
+pipe.vae.decode = _instrumented_vae_decode
+
 
 def encode_prompt(text_prompt):
     # ========================================================
