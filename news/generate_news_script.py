@@ -310,7 +310,11 @@ def main():
     outdir = Path(f"jobs/story_pipeline{pipeline_no}")
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "final_story.json").write_text(
-        json.dumps({"title": title, "scenes": scenes}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {"title": title, "speaker_id": 30, "scenes": scenes},  # No.7 アナウンス(ニュース系)
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 

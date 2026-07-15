@@ -15,7 +15,7 @@ from pathlib import Path
 args = sys.argv
 
 VOICEVOX_URL = "http://127.0.0.1:50021"
-SPEAKER_ID = 31  # No.7 読み聞かせ
+DEFAULT_SPEAKER_ID = 31  # No.7 読み聞かせ(final_story.jsonに指定が無い場合のフォールバック)
 
 BASEDIR = Path(f"jobs/story_pipeline{args[1]}")
 OUTDIR = BASEDIR / f"voices"
@@ -23,6 +23,8 @@ OUTDIR.mkdir(parents=True, exist_ok=True)
 
 with open(BASEDIR / "final_story.json", encoding="utf-8") as f:
     story = json.load(f)
+
+SPEAKER_ID = story.get("speaker_id", DEFAULT_SPEAKER_ID)
 
 narrations = []
 for scene in story["scenes"]:

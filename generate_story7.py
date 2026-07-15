@@ -154,10 +154,20 @@ for scene in narration_scenes:
 
 
 
+def speaker_id_for_variant(variant_id: int) -> int:
+    # VOICEVOX「No.7」のスタイル違いで、ジャンル系統ごとにトーンを変える
+    if 1000 <= variant_id < 2000:
+        return 31  # 読み聞かせ(ドラマ系)
+    if 2000 <= variant_id < 4000:
+        return 29  # ノーマル(学びなおし系)
+    return 31  # フォールバック
+
+
 # 5. 最終保存
 final_data = {
     "title": MOVIE_THEME,
     "synopsis": "",
+    "speaker_id": speaker_id_for_variant(int(args[1])),
     "scenes": final_scenes
 }
 
