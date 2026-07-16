@@ -9,7 +9,9 @@
 !/send_completion_email.py
 !/run_pipeline.py
 !/run_news_pipeline.py
+!/run_rotation_loop.py
 !/create_tables_video.sql
+!/add_news_genres_to_video_db.sql
 !/import_movie_titles.py
 !/include/
 !/include/**
