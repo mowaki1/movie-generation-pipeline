@@ -19,6 +19,8 @@ STEPS = [
     ["generate_images2.py", pipeline_no],
     ["generate_voices3.py", pipeline_no],
     ["generate_movie4.py", pipeline_no],
+    ["generate_description.py", pipeline_no],
+    ["generate_thumbnail.py", pipeline_no],
 ]
 
 
