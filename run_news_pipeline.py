@@ -20,6 +20,7 @@ STEPS = [
     ["generate_movie4.py", pipeline_no],
     ["generate_description.py", pipeline_no],
     ["generate_thumbnail.py", pipeline_no],
+    ["send_completion_email.py", pipeline_no],
 ]
 
 
