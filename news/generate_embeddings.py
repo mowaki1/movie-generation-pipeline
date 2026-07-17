@@ -1,3 +1,9 @@
+import os
+
+# モデルは既にローカルキャッシュ済みのため、Hugging Face Hubへの更新確認通信を
+# 完全に無効化する(HF Hub側の一時的な401等でクラッシュするのを防ぐ)
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 import psycopg2
 from sentence_transformers import SentenceTransformer
 
