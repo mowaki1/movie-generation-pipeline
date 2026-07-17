@@ -157,6 +157,8 @@ def mark_duplicate_articles(conn, article_id, max_distance=DUPLICATE_DISTANCE_TH
 
 
 def find_related_articles(conn, article_id, limit=RELATED_ARTICLES_LIMIT):
+    # コサイン距離がDUPLICATE_DISTANCE_THRESHOLD未満の記事は、別ソースが同じ出来事を
+    # 報じているだけの重複である可能性が高く、深掘り材料として意味が薄いため除外する
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -165,13 +167,17 @@ def find_related_articles(conn, article_id, limit=RELATED_ARTICLES_LIMIT):
             JOIN t_articles a ON a.id = e.article_id
             WHERE e.embedding_model_id = 1
               AND e.article_id != %s
+              AND e.embedding <=> (
+                SELECT embedding FROM t_embeddings
+                WHERE article_id = %s AND embedding_model_id = 1
+              ) >= %s
             ORDER BY e.embedding <=> (
                 SELECT embedding FROM t_embeddings
                 WHERE article_id = %s AND embedding_model_id = 1
             )
             LIMIT %s
             """,
-            (article_id, article_id, limit),
+            (article_id, article_id, DUPLICATE_DISTANCE_THRESHOLD, article_id, limit),
         )
         return cur.fetchall()
 
