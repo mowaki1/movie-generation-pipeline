@@ -26,6 +26,12 @@ with open(INCLUDE_PATH / f"variables_{args[1]}.py", "r", encoding="utf-8-sig") a
 OUTDIR = Path(f"jobs/story_pipeline{args[2]}")
 OUTDIR.mkdir(parents=True, exist_ok=True)
 
+if (OUTDIR / "final_story.json").exists():
+    # 既に台本が完成している場合は再生成しない(後続工程の画像/音声キャッシュと
+    # 内容がミスマッチするのを防ぐため、他の工程と同じ「既存ならスキップ」に揃える)
+    print(f"skip (cached): {OUTDIR / 'final_story.json'}")
+    raise SystemExit(0)
+
 # 関数群のpy
 with open(INCLUDE_PATH / "functions.py", "r", encoding="utf-8-sig") as f:
     exec(f.read())

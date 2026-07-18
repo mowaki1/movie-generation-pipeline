@@ -286,6 +286,13 @@ def main():
     genre_variant_id = int(args[1])
     pipeline_no = args[2]
 
+    outdir = Path(f"jobs/story_pipeline{pipeline_no}")
+    if (outdir / "final_story.json").exists():
+        # 既に台本が完成している場合は再生成しない(記事の再選定やTavilyクエリの
+        # 無駄遣いを避け、後続工程の画像/音声キャッシュとのミスマッチも防ぐ)
+        print(f"skip (cached): {outdir / 'final_story.json'}")
+        return
+
     genre_id = VARIANT_TO_GENRE.get(genre_variant_id)
     if genre_id is None:
         print(f"ERROR: unknown genre_id {genre_variant_id} (expected 10001-10009)")
@@ -313,7 +320,6 @@ def main():
     print(f"title: {title}")
     print(f"generated {len(scenes)} scenes")
 
-    outdir = Path(f"jobs/story_pipeline{pipeline_no}")
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "final_story.json").write_text(
         json.dumps(
