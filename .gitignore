@@ -7,6 +7,7 @@
 !/generate_description.py
 !/generate_thumbnail.py
 !/send_completion_email.py
+!/generate_channel_art.py
 !/run_pipeline.py
 !/run_news_pipeline.py
 !/run_rotation_loop.py
