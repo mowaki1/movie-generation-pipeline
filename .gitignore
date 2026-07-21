@@ -8,6 +8,8 @@
 !/generate_thumbnail.py
 !/send_completion_email.py
 !/generate_channel_art.py
+!/generate_channel_handle.py
+!/setup_all_channels.py
 !/generate_channel_description.py
 !/run_pipeline.py
 !/run_news_pipeline.py

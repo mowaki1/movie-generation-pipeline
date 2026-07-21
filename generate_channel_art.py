@@ -11,6 +11,7 @@ FONT_NAME = "BIZ UDPGothic"
 
 ICON_SIZE = 800
 BANNER_SIZE = (2560, 1440)
+WATERMARK_SIZE = 150
 
 # ジャンル系統ごとの配色(背景色, 文字色)
 FAMILY_COLORS = {
@@ -75,6 +76,18 @@ def make_icon(genre_name, bg_color, accent_color, font_path, out_path):
     img.save(out_path)
 
 
+def make_watermark(genre_name, accent_color, font_path, out_path):
+    # 動画上に常時重なるため背景は透過にし、アイコンと同じ頭文字ロゴで統一感を出す
+    img = Image.new("RGBA", (WATERMARK_SIZE, WATERMARK_SIZE), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    label = genre_name[0]
+    font = ImageFont.truetype(font_path, 100)
+    draw_centered_text(draw, label, font, WATERMARK_SIZE // 2, WATERMARK_SIZE // 2, accent_color)
+
+    img.save(out_path)
+
+
 def make_banner(genre_name, bg_color, accent_color, font_path, out_path):
     img = Image.new("RGB", BANNER_SIZE, bg_color)
     draw = ImageDraw.Draw(img)
@@ -112,8 +125,9 @@ def main():
 
     make_icon(genre_name, bg_color, accent_color, font_path, outdir / "icon.png")
     make_banner(genre_name, bg_color, accent_color, font_path, outdir / "banner.png")
+    make_watermark(genre_name, accent_color, font_path, outdir / "watermark.png")
 
-    print(f"done: {outdir / 'icon.png'}, {outdir / 'banner.png'}")
+    print(f"done: {outdir / 'icon.png'}, {outdir / 'banner.png'}, {outdir / 'watermark.png'}")
 
 
 if __name__ == "__main__":
