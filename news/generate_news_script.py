@@ -319,7 +319,9 @@ def main():
     print("generating script...")
     title, scenes = generate_script(main_article, related_articles, web_results)
     # ニュースは鮮度が重要なため、動画タイトルに生成日を付与する
-    title = f"{date.today():%Y年%m月%d日} {title}"
+    # (strftimeの%m/%dはゼロ埋めされるため、非ゼロ埋めで直接組み立てる)
+    today = date.today()
+    title = f"{today.year}年{today.month}月{today.day}日 {title}"
     print(f"title: {title}")
     print(f"generated {len(scenes)} scenes")
 
