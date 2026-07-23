@@ -171,6 +171,7 @@ def speaker_id_for_variant(variant_id: int) -> int:
 
 # 5. 最終保存
 final_data = {
+    "genre_id": int(args[1]),
     "title": MOVIE_THEME,
     "synopsis": "",
     "speaker_id": speaker_id_for_variant(int(args[1])),
