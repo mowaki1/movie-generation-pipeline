@@ -10,6 +10,7 @@
 !/generate_channel_art.py
 !/generate_channel_handle.py
 !/setup_all_channels.py
+!/collect_final_stories.py
 !/generate_channel_description.py
 !/run_pipeline.py
 !/run_news_pipeline.py
