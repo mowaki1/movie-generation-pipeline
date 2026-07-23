@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import psycopg2
@@ -317,13 +318,20 @@ def main():
 
     print("generating script...")
     title, scenes = generate_script(main_article, related_articles, web_results)
+    # ニュースは鮮度が重要なため、動画タイトルに生成日を付与する
+    title = f"{date.today():%Y年%m月%d日} {title}"
     print(f"title: {title}")
     print(f"generated {len(scenes)} scenes")
 
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "final_story.json").write_text(
         json.dumps(
-            {"title": title, "speaker_id": 30, "scenes": scenes},  # No.7 アナウンス(ニュース系)
+            {
+                "genre_id": genre_variant_id,
+                "title": title,
+                "speaker_id": 30,
+                "scenes": scenes,
+            },  # No.7 アナウンス(ニュース系)
             ensure_ascii=False,
             indent=2,
         ),
