@@ -24,6 +24,14 @@ FAMILY_COLORS = {
 TAGLINE = "AI自動生成チャンネル"
 
 
+FAMILY_ID_RANGES = {
+    "drama": (1000, 2000),
+    "study": (2000, 3000),
+    "trivia": (3000, 4000),
+    "news": (10000, 20000),
+}
+
+
 def get_family(genre_id):
     if 1000 <= genre_id < 2000:
         return "drama"
@@ -45,6 +53,33 @@ def get_genre_name(conn, genre_id):
         return row[0]
 
 
+def get_family_genre_names(conn, family):
+    lo, hi = FAMILY_ID_RANGES[family]
+    with conn.cursor() as cur:
+        cur.execute("SELECT genre FROM m_genres WHERE id >= %s AND id < %s", (lo, hi))
+        return [row[0] for row in cur.fetchall()]
+
+
+def common_prefix_length(strings):
+    if len(strings) < 2:
+        return 0
+    shortest = min(strings, key=len)
+    for i, ch in enumerate(shortest):
+        if any(s[i] != ch for s in strings):
+            return i
+    return len(shortest)
+
+
+def pick_icon_label(genre_name, family_names):
+    # 「大人の学びなおし」のように系統内で共通の接頭辞を持つ名前だと
+    # 先頭1文字だけでは全チャンネルのアイコンが同じ文字になってしまうため、
+    # 系統内で共通する接頭辞を除いた最初の文字を使って区別する
+    prefix_len = common_prefix_length(family_names)
+    if prefix_len < len(genre_name):
+        return genre_name[prefix_len]
+    return genre_name[0]
+
+
 def resolve_font_path(font_name=FONT_NAME):
     result = subprocess.run(
         ["fc-match", "-f", "%{file}", font_name],
@@ -64,28 +99,37 @@ def draw_centered_text(draw, text, font, center_x, center_y, fill):
     draw.text((x, y), text, font=font, fill=fill)
 
 
-def make_icon(genre_name, bg_color, accent_color, font_path, out_path):
+def make_icon(label, bg_color, accent_color, font_path, out_path):
     img = Image.new("RGB", (ICON_SIZE, ICON_SIZE), bg_color)
     draw = ImageDraw.Draw(img)
 
-    # 小さく円形表示されるため、先頭1文字のみをロゴ的に大きく配置する
-    label = genre_name[0]
+    # 小さく円形表示されるため、区別のつく1文字のみをロゴ的に大きく配置する
     font = ImageFont.truetype(font_path, 420)
     draw_centered_text(draw, label, font, ICON_SIZE // 2, ICON_SIZE // 2, accent_color)
 
     img.save(out_path)
 
 
-def make_watermark(genre_name, accent_color, font_path, out_path):
-    # 動画上に常時重なるため背景は透過にし、アイコンと同じ頭文字ロゴで統一感を出す
+def make_watermark(label, accent_color, font_path, out_path):
+    # 動画上に常時重なるため背景は透過にし、アイコンと同じロゴ文字で統一感を出す
     img = Image.new("RGBA", (WATERMARK_SIZE, WATERMARK_SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    label = genre_name[0]
     font = ImageFont.truetype(font_path, 100)
     draw_centered_text(draw, label, font, WATERMARK_SIZE // 2, WATERMARK_SIZE // 2, accent_color)
 
     img.save(out_path)
+
+
+def fit_font_size(text, font_path, max_width, max_size, min_size=40):
+    size = max_size
+    while size > min_size:
+        font = ImageFont.truetype(font_path, size)
+        bbox = font.getbbox(text)
+        if bbox[2] - bbox[0] <= max_width:
+            return font
+        size -= 5
+    return ImageFont.truetype(font_path, min_size)
 
 
 def make_banner(genre_name, bg_color, accent_color, font_path, out_path):
@@ -94,8 +138,9 @@ def make_banner(genre_name, bg_color, accent_color, font_path, out_path):
 
     cx, cy = BANNER_SIZE[0] // 2, BANNER_SIZE[1] // 2
 
-    # 中央のセーフエリア(約1546x423)内に収まるようフォントサイズを抑えている
-    title_font = ImageFont.truetype(font_path, 110)
+    # 中央のセーフエリア(約1546x423)内に収まるよう、長いジャンル名では
+    # フォントサイズを自動的に縮小する
+    title_font = fit_font_size(genre_name, font_path, max_width=1500, max_size=110)
     tagline_font = ImageFont.truetype(font_path, 40)
 
     draw_centered_text(draw, genre_name, title_font, cx, cy - 90, accent_color)
@@ -116,16 +161,19 @@ def main():
 
     conn = psycopg2.connect(DB_DSN)
     genre_name = get_genre_name(conn, genre_id)
+    family_names = get_family_genre_names(conn, family)
     conn.close()
+
+    icon_label = pick_icon_label(genre_name, family_names)
 
     font_path = resolve_font_path()
 
     outdir = Path(f"channel_art/{genre_id}")
     outdir.mkdir(parents=True, exist_ok=True)
 
-    make_icon(genre_name, bg_color, accent_color, font_path, outdir / "icon.png")
+    make_icon(icon_label, bg_color, accent_color, font_path, outdir / "icon.png")
     make_banner(genre_name, bg_color, accent_color, font_path, outdir / "banner.png")
-    make_watermark(genre_name, accent_color, font_path, outdir / "watermark.png")
+    make_watermark(icon_label, accent_color, font_path, outdir / "watermark.png")
 
     print(f"done: {outdir / 'icon.png'}, {outdir / 'banner.png'}, {outdir / 'watermark.png'}")
 
