@@ -17,7 +17,7 @@ Markdown禁止。
   "synopsis": "...",
   "characters": [
     {{
-      "name": "神崎健司",
+      "name": "桐生誠一",
       "role": "主人公",
       "age": 78,
       "appearance": "78-year-old Japanese man, short gray hair, deep wrinkles, sharp eyes, navy business suit, former bank vice president, dignified but lonely atmosphere"
