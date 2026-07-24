@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,17 +19,34 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 NARRATION_CHARS_LIMIT = 6000
 
 SYNOPSIS_PROMPT_TEMPLATE = """以下は動画のタイトルとナレーション全文です。
-この動画のYouTube概要欄に載せるあらすじを、日本語で200〜400字程度で書いてください。
+この動画のYouTube概要欄・タグ欄に載せる情報をJSON形式で作成してください。
 
 条件:
-・物語の核心的な結末までは明かしすぎず、視聴を促す紹介文にすること
-・前置きや見出し(「あらすじ:」等)は不要で、本文のみを出力すること
+・synopsis: 物語の核心的な結末までは明かしすぎず、視聴を促す紹介文(日本語200〜400字程度)。前置きや見出しは不要で本文のみ
+・hashtags: 動画の内容に関連する日本語ハッシュタグを5個、"#"付き・半角スペース区切りの1つの文字列
+・tags: YouTubeのタグ欄に登録する検索キーワードを10〜15個、日本語の配列
+
+出力はJSON以外の文字列を一切出力しないこと。
+
+出力形式:
+{{
+  "synopsis": "...",
+  "hashtags": "#〇〇 #〇〇 #〇〇 #〇〇 #〇〇",
+  "tags": ["...", "..."]
+}}
 
 タイトル: {title}
 
 ナレーション全文:
 {narration_full}
 """
+
+
+def strip_code_fence(text):
+    text = text.strip()
+    text = re.sub(r"^```(?:json)?", "", text).strip()
+    text = re.sub(r"```$", "", text).strip()
+    return text
 
 
 def ask_ollama(prompt, num_predict=800):
@@ -71,18 +89,25 @@ def main():
     title = story.get("title", "")
     narration_full = "\n".join(scene["narration"] for scene in story["scenes"])
 
-    print("generating synopsis...")
-    synopsis = ask_ollama(
+    print("generating synopsis/hashtags/tags...")
+    response = ask_ollama(
         SYNOPSIS_PROMPT_TEMPLATE.format(
             title=title,
             narration_full=narration_full[:NARRATION_CHARS_LIMIT],
-        )
+        ),
+        num_predict=1500,
     )
 
     # 後続工程(サムネイル生成のFLUX等)がVRAMを使えるよう、終了時にOllamaのモデルをアンロードする
     subprocess.run(["ollama", "stop", MODEL], check=False)
 
-    out_path.write_text(synopsis, encoding="utf-8")
+    data = json.loads(strip_code_fence(response))
+    synopsis = data["synopsis"].strip()
+    hashtags = data["hashtags"].strip()
+    tags = data["tags"]
+
+    out_path.write_text(f"{synopsis}\n\n{hashtags}", encoding="utf-8")
+    (OUTDIR / "tags.txt").write_text(", ".join(tags), encoding="utf-8")
     print(f"done: {out_path}")
 
 
