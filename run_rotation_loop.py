@@ -19,6 +19,12 @@ STUDY_GENRES = [
 ]
 NEWS_GENRES = [10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009]
 
+ALL_GENRES = DRAMA_TRIVIA_GENRES + STUDY_GENRES + NEWS_GENRES
+
+# この本数だけ各ジャンルで成功(status_id=3)すれば、そのジャンルは
+# 手動アップロードでの目視確認が一巡したとみなす
+AUTO_UPLOAD_REVIEW_THRESHOLD = 2
+
 REST_SECONDS = 1.5 * 3600
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -97,6 +103,19 @@ def run_news(conn, genre_id):
         mark_status(conn, row_id, 2)
 
 
+def get_completed_counts(conn):
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT genre_id, COUNT(*) FROM t_movie_titles WHERE status_id = 3 GROUP BY genre_id"
+        )
+        return dict(cur.fetchall())
+
+
+def all_genres_reviewed_twice(conn):
+    counts = get_completed_counts(conn)
+    return all(counts.get(g, 0) >= AUTO_UPLOAD_REVIEW_THRESHOLD for g in ALL_GENRES)
+
+
 def rest():
     print(f"resting for {REST_SECONDS / 3600:.1f} hours (GPU cooldown)...")
     time.sleep(REST_SECONDS)
@@ -108,6 +127,7 @@ def main():
 
     drama_idx = 0
     study_idx = 0
+    auto_upload_announced = False
 
     while True:
         # 1000/3000番台 x1
@@ -127,6 +147,10 @@ def main():
         for genre_id in NEWS_GENRES:
             run_news(conn, genre_id)
         rest()
+
+        if not auto_upload_announced and all_genres_reviewed_twice(conn):
+            auto_upload_announced = True
+            print("=== 全ジャンルで手動アップロードが2周完了しました。自動アップロードへの移行タイミングです ===")
 
 
 if __name__ == "__main__":
