@@ -272,8 +272,14 @@ def generate_script(main_article, related_articles, web_results):
         raise RuntimeError("LLM returned an empty scenes list")
 
     # scene_noを1始まりの連番に振り直す(欠番/重複対策)
+    required_keys = ("narration", "image_prompt", "motion_prompt")
     for i, scene in enumerate(scenes, start=1):
         scene["scene_no"] = i
+        missing = [k for k in required_keys if not scene.get(k, "").strip()]
+        if missing:
+            raise RuntimeError(
+                f"LLM output is missing required key(s) {missing} in scene {i}: {scene}"
+            )
 
     return title, scenes
 
