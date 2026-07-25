@@ -1,4 +1,15 @@
 ﻿
+GARBLED_BYTE_TOKEN_RE = re.compile(r"<0x[0-9A-Fa-f]{2}>")
+
+
+def has_garbled_byte_tokens(text):
+    # llama.cpp/Ollama側がUTF-8として正しく組み立てられなかったトークンを
+    # "<0xE6>"のようなバイト表記のまま出力してしまうことがある(特に日本語の
+    # 漢字生成時)。これはPython側の文字化けではなく生成結果自体の破損なので、
+    # 検出したら再試行する
+    return bool(GARBLED_BYTE_TOKEN_RE.search(text))
+
+
 def ask(prompt, filename=None, num_predict=4096):
     # 注意: "format": "json" (文法制約付きデコーディング)はgemma4:31b-it-bf16で
     # 出力が"own own own..."のように壊れる不具合があるため使用しない。
@@ -20,7 +31,7 @@ def ask(prompt, filename=None, num_predict=4096):
         res.raise_for_status()
         text = res.json().get("response", "").strip()
 
-        if len(text) > 50:
+        if len(text) > 50 and not has_garbled_byte_tokens(text):
             if filename:
                 (OUTDIR / filename).write_text(text, encoding="utf-8")
             return text

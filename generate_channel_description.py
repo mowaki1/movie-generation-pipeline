@@ -1,3 +1,4 @@
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,11 @@ DB_DSN = "dbname=video_pipeline"
 
 MODEL = "gemma4:31b-it-bf16"
 OLLAMA_URL = "http://localhost:11434/api/generate"
+
+# llama.cpp/Ollama側がUTF-8として正しく組み立てられなかったトークンを
+# "<0xE6>"のようなバイト表記のまま出力してしまうことがある(特に日本語の
+# 漢字生成時)。生成結果自体の破損なので検出したら失敗させる
+GARBLED_BYTE_TOKEN_RE = re.compile(r"<0x[0-9A-Fa-f]{2}>")
 
 FAMILY_LABELS = {
     "drama": "人間ドラマ",
@@ -77,6 +83,8 @@ def ask_ollama(prompt, num_predict=800):
             f"empty response, done_reason={data.get('done_reason')!r}, "
             f"eval_count={data.get('eval_count')}"
         )
+    if GARBLED_BYTE_TOKEN_RE.search(text):
+        raise RuntimeError(f"LLM output contains garbled byte tokens: {text!r}")
     return text
 
 
