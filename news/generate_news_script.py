@@ -248,7 +248,7 @@ def build_script_prompt(main_article, related_articles, web_results):
     _, main_title, main_body, _ = main_article
 
     related_text = "\n".join(
-        f"- {title}: {summary}" for _, title, summary in related_articles
+        f"- {title}: {summary or ''}" for _, title, summary in related_articles
     ) or "(該当なし)"
 
     web_text = "\n".join(
