@@ -19,7 +19,7 @@ Markdown禁止。
       "name": "...",
       "role": "主人公",
       "age": 60,
-      "appearance": ""
+      "appearance": "age, gender, ethnicity appropriate to the era/region, hairstyle, clothing of that time and place, facial expression, atmosphere"
     }}
   ],
   "story_structure": {{
@@ -40,6 +40,7 @@ Markdown禁止。
 - appearance は時代考証を入れる
 - appearance はFlux向けの英語プロンプトにする
 - appearance には年齢、性別、髪型、服装、表情、雰囲気を入れる
+- appearance には人種・民族的背景を必ず明記すること(その時代・地域に実在した人々の人種を正確に反映させる。テーマが日本の歴史なら日本人、古代エジプトならエジプト人、ヨーロッパならヨーロッパ人など、空欄や省略は禁止)
 - まだ本文やシーン本文は書かない
 
 重要：
