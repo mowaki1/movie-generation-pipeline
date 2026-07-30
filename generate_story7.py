@@ -142,16 +142,26 @@ for start in range(1, VIDEO_LENGTH + 1, 5):
         exec(f.read())
 
 
-    text = ask(
-        narration_prompt,
-        filename=f"03_narration_{start:03d}_{end:03d}_raw.json",
-        num_predict=4096,
-    )
-    try:
-        part = parse_pipe_narration(text, start, end)
-    except Exception as e:
-        print(f"narration parse failed {start}-{end}: {e}")
-        print(text)
+    # LLMが一部のシーン番号を生成せず打ち切ることがある(構文的には正常だが
+    # 内容が不完全)。ask()側のリトライ(壊れたバイト列/短すぎる応答)とは
+    # 別の失敗パターンなので、ここでも数回re試行してから諦める
+    NARRATION_MAX_RETRIES = 3
+    part = None
+    for attempt in range(1, NARRATION_MAX_RETRIES + 1):
+        text = ask(
+            narration_prompt,
+            filename=f"03_narration_{start:03d}_{end:03d}_raw.json",
+            num_predict=4096,
+        )
+        try:
+            part = parse_pipe_narration(text, start, end)
+            break
+        except Exception as e:
+            print(f"narration parse failed {start}-{end} (試行 {attempt}/{NARRATION_MAX_RETRIES}): {e}")
+            print(text)
+
+    if part is None:
+        print(f"ERROR: narration {start}-{end} が{NARRATION_MAX_RETRIES}回試行しても失敗しました")
         raise SystemExit(1)
 
     for item in part:

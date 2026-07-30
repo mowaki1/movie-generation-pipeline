@@ -12,6 +12,13 @@ import psycopg2
 # ログから失われることがあったため
 os.environ["PYTHONUNBUFFERED"] = "1"
 
+# 上記のos.environ設定は実行中の"このプロセス自身"の標準出力バッファリングには
+# 効かない(新規に起動する子プロセスにのみ継承される)。run_rotation_loop.py自身の
+# print()(genre_id=...の行など)もログに確実に残すため、このプロセス自身の
+# 標準出力/標準エラーも明示的に行バッファリングに変更する
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 DB_DSN = "dbname=video_pipeline"
 
 # 1000番台(ドラマ)+3000番台(雑学・ミステリー)
