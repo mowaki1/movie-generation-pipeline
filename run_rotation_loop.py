@@ -148,6 +148,9 @@ def main():
         genre_id = DRAMA_TRIVIA_GENRES[drama_idx % len(DRAMA_TRIVIA_GENRES)]
         drama_idx += 1
         run_drama_or_study(conn, genre_id)
+        # ITニュース、金融ニュース(各一回)
+        for genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
+            run_news(conn, genre_id)
         rest()
 
         # 2000番台 x2
@@ -155,6 +158,9 @@ def main():
             genre_id = STUDY_GENRES[study_idx % len(STUDY_GENRES)]
             study_idx += 1
             run_drama_or_study(conn, genre_id)
+        # ITニュース、金融ニュース(各一回)
+        for genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
+            run_news(conn, genre_id)
         rest()
 
         # ITの教室・お金の教室 x2
@@ -164,11 +170,9 @@ def main():
             run_drama_or_study(conn, genre_id)
         rest()
 
-        # 10000番台 全て(ITニュース・金融ニュースは反応が良いため2倍の頻度)
+        # 10000番台 全て(全て一回ずつ)
         for genre_id in NEWS_GENRES:
             run_news(conn, genre_id)
-            if genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
-                run_news(conn, genre_id)
         rest()
 
         if not auto_upload_announced and all_genres_reviewed_twice(conn):
