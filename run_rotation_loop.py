@@ -32,7 +32,7 @@ ALL_GENRES = DRAMA_TRIVIA_GENRES + STUDY_GENRES + NEWS_GENRES
 # 手動アップロードでの目視確認が一巡したとみなす
 AUTO_UPLOAD_REVIEW_THRESHOLD = 2
 
-REST_SECONDS = 1.5 * 3600
+REST_SECONDS = 1 * 3600
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
