@@ -26,7 +26,10 @@ STUDY_GENRES = [
 ]
 NEWS_GENRES = [10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009]
 
-ALL_GENRES = DRAMA_TRIVIA_GENRES + STUDY_GENRES + NEWS_GENRES
+# ITの教室・お金の教室(実用系、学びなおし系と同じく2倍頻度で回す)
+PRACTICAL_GENRES = [3003, 3004]
+
+ALL_GENRES = DRAMA_TRIVIA_GENRES + STUDY_GENRES + NEWS_GENRES + PRACTICAL_GENRES
 
 # この本数だけ各ジャンルで成功(status_id=3)すれば、そのジャンルは
 # 手動アップロードでの目視確認が一巡したとみなす
@@ -137,6 +140,7 @@ def main():
 
     drama_idx = 0
     study_idx = 0
+    practical_idx = 0
     auto_upload_announced = False
 
     while True:
@@ -150,6 +154,13 @@ def main():
         for _ in range(2):
             genre_id = STUDY_GENRES[study_idx % len(STUDY_GENRES)]
             study_idx += 1
+            run_drama_or_study(conn, genre_id)
+        rest()
+
+        # ITの教室・お金の教室 x2
+        for _ in range(2):
+            genre_id = PRACTICAL_GENRES[practical_idx % len(PRACTICAL_GENRES)]
+            practical_idx += 1
             run_drama_or_study(conn, genre_id)
         rest()
 

@@ -1,5 +1,6 @@
 ﻿import requests
 import json
+import os
 import time
 import re
 import sys
@@ -13,6 +14,24 @@ MODEL = "gemma4:31b-it-bf16"
 API_URL = "http://localhost:11434/api/generate"
 #MOVIE_THEME = "面会ゼロだった老人に起きた大逆転"
 MOVIE_THEME = args[3]
+
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
+TAVILY_URL = "https://api.tavily.com/search"
+
+
+def tavily_search(query, max_results=5):
+    res = requests.post(
+        TAVILY_URL,
+        json={
+            "api_key": TAVILY_API_KEY,
+            "query": query,
+            "max_results": max_results,
+            "search_depth": "basic",
+        },
+        timeout=30,
+    )
+    res.raise_for_status()
+    return res.json().get("results", [])
 
 # 後続工程(FLUX/Wan2.2/LTX)がVRAMを使えるよう、終了時にOllamaのモデルを明示的にアンロードする
 atexit.register(lambda: subprocess.run(["ollama", "stop", MODEL], check=False))
@@ -31,6 +50,22 @@ if (OUTDIR / "final_story.json").exists():
     # 内容がミスマッチするのを防ぐため、他の工程と同じ「既存ならスキップ」に揃える)
     print(f"skip (cached): {OUTDIR / 'final_story.json'}")
     raise SystemExit(0)
+
+# LLMの学習データが古いジャンル(variables_*.pyでUSE_TAVILY_SEARCH = Trueを
+# 指定したもの)では、テーマ名でWeb検索し最新情報をBASEに埋め込む
+web_context = ""
+if globals().get("USE_TAVILY_SEARCH", False):
+    print("searching web (Tavily)...")
+    web_results = tavily_search(MOVIE_THEME)
+    web_text = "\n".join(
+        f"- {r.get('title', '')}: {r.get('content', '')[:500]}" for r in web_results
+    )
+    if web_text:
+        web_context = f"""
+参考情報(Web検索結果。LLMの学習データより新しい情報の可能性があるため、
+内容が矛盾する場合はこちらを優先すること):
+{web_text}
+"""
 
 # 関数群のpy
 with open(INCLUDE_PATH / "functions.py", "r", encoding="utf-8-sig") as f:
