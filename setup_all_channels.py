@@ -2,11 +2,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-from run_rotation_loop import DRAMA_TRIVIA_GENRES, NEWS_GENRES, STUDY_GENRES
+from run_rotation_loop import (
+    DRAMA_TRIVIA_GENRES,
+    NEWS_GENRES,
+    PRACTICAL_GENRES,
+    STUDY_GENRES,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-ALL_GENRES = DRAMA_TRIVIA_GENRES + STUDY_GENRES + NEWS_GENRES
+ALL_GENRES = DRAMA_TRIVIA_GENRES + STUDY_GENRES + NEWS_GENRES + PRACTICAL_GENRES
 
 STEPS = [
     "generate_channel_art.py",
