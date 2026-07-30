@@ -1,78 +1,41 @@
-# 2. 100シーン骨子作成
+# 2. シーン骨子作成
 outline = []
-chapter1 = design_json["story_structure"]["chapter1"]
-chapter2 = design_json["story_structure"]["chapter2"]
-chapter3 = design_json["story_structure"]["chapter3"]
-chapter4 = design_json["story_structure"]["chapter4"]
-chapter5 = design_json["story_structure"]["chapter5"]
-chapter6 = design_json["story_structure"]["chapter6"]
-chapter7 = design_json["story_structure"]["chapter7"]
-chapter8 = design_json["story_structure"]["chapter8"]
 
-for start in range(1, VIDEO_LENGTH + 1, STEP):
-    end = start + STEP - 1
+CHAPTER_TEXTS = [design_json["story_structure"][f"chapter{i}"] for i in range(1, 9)]
 
-    if start == 1:
-        act_name = "第1段階"
-        act_text = design_json["story_structure"]["chapter1"]
-        extra_rule = f"""
-この5シーンはchapter1です。
-導入・問題提起
-「なぜ○○なのか？」
-「○○とは何か？」
+CHAPTER_DESCRIPTIONS = [
+    "導入・問題提起\n「なぜ○○なのか？」\n「○○とは何か？」",
+    "背景・基礎知識\nテーマを理解するために必要な知識",
+    "本題①\n最初の重要ポイント",
+    "本題②\nさらに詳しく解説",
+    "核心・仕組み・原因・流れなど",
+    "テーマから導かれる結論",
+    "他分野や現代との関係",
+    "重要ポイントの整理",
+]
+
+# 8章をVIDEO_LENGTHに応じて比例配分する。
+# 固定5シーン刻み(STEP)だとVIDEO_LENGTHを短縮した際に、
+# chapter7・chapter8(他分野との関連・重要ポイントの整理)が
+# 一度も生成されないまま終わる不具合があったため、動的に算出する
+CHAPTER_BOUNDARIES = [1 + (VIDEO_LENGTH * i) // 8 for i in range(8)] + [VIDEO_LENGTH + 1]
+
+for chapter_index in range(8):
+    start = CHAPTER_BOUNDARIES[chapter_index]
+    end = CHAPTER_BOUNDARIES[chapter_index + 1] - 1
+
+    if start > VIDEO_LENGTH:
+        break
+    if end < start:
+        continue
+
+    act_name = f"第{chapter_index + 1}段階"
+    act_text = CHAPTER_TEXTS[chapter_index]
+    extra_rule = f"""
+このシーンはchapter{chapter_index + 1}です。
+{CHAPTER_DESCRIPTIONS[chapter_index]}
 """
-    if start == 6:
-        act_name = "第2段階"
-        act_text = design_json["story_structure"]["chapter2"]
-        extra_rule = f"""
-この5シーンはchapter2です。
-背景・基礎知識
-テーマを理解するために必要な知識
-"""
-    elif start == 11:
-        act_name = "第3段階"
-        act_text = design_json["story_structure"]["chapter3"]
-        extra_rule = f"""
-この5シーンはchapter3です。
-本題①
-最初の重要ポイント
-"""
-    elif start == 16:
-        act_name = "第4段階"
-        act_text = design_json["story_structure"]["chapter4"]
-        extra_rule = f"""
-この5シーンはchapter4です。
-本題②
-さらに詳しく解説
-"""
-    elif start == 21:
-        act_name = "第5段階"
-        act_text = design_json["story_structure"]["chapter5"]
-        extra_rule = f"""
-この5シーンはchapter5です。
-核心・仕組み・原因・流れなど
-"""
-    elif start == 26:
-        act_name = "第6段階"
-        act_text = design_json["story_structure"]["chapter6"]
-        extra_rule = f"""
-この5シーンはchapter6です。
-テーマから導かれる結論
-"""
-    elif start ==31:
-        act_name = "第7段階"
-        act_text = design_json["story_structure"]["chapter7"]
-        extra_rule = f"""
-この5シーンはchapter7です。
-他分野や現代との関係
-"""
-    elif start == 36:
-        act_name = "第8段階"
-        act_text = design_json["story_structure"]["chapter8"]
-        extra_rule = f"""
-この5シーンはchapter8です。
-重要ポイントの整理
-"""
+
     outline_prompt = f"""
 {BASE}
 
@@ -93,8 +56,6 @@ Markdown禁止。
 {start}|要約
 {start + 1}|要約
 {start + 2}|要約
-{start + 3}|要約
-{start + 4}|要約
 
 条件：
 - scene_no {start} から {end} までのみ出力
@@ -137,11 +98,12 @@ scene_no {start} から {end} まで、全番号を1行ずつ出力すること�
 
     print(f"outline {start}-{end}: {len(part)}")
 
-    if len(part) != STEP:
+    expected_count = end - start + 1
+    if len(part) != expected_count:
         print(f"ERROR: outline {start}-{end} が {len(part)} 件です")
         print(outline_text)
         raise SystemExit(1)
-    
+
     for x in part:
         outline.append({
             "scene_no": int(x["scene_no"]),
