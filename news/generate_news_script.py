@@ -266,7 +266,10 @@ def build_script_prompt(main_article, related_articles, web_results):
 
 def generate_script(main_article, related_articles, web_results):
     prompt = build_script_prompt(main_article, related_articles, web_results)
-    response = ask_ollama(prompt, num_predict=6000)
+    # TARGET_SCENESを12→24に倍増した際、num_predictが6000のままだと
+    # 1シーンあたりの分量から見て上限ギリギリ〜超過し、出力が途中で
+    # 切れて実際のシーン数が足りなくなる恐れがあるため、あわせて倍増する
+    response = ask_ollama(prompt, num_predict=12000)
 
     text = strip_code_fence(response)
     data = json.loads(text)
@@ -277,6 +280,13 @@ def generate_script(main_article, related_articles, web_results):
         raise RuntimeError("LLM did not return a title")
     if not scenes:
         raise RuntimeError("LLM returned an empty scenes list")
+    # num_predictの上限に達して途中で出力が切れると、JSON自体は正常でも
+    # シーン数が大きく不足したまま静かに完了してしまうため検知する
+    if len(scenes) < TARGET_SCENES * 0.6:
+        raise RuntimeError(
+            f"generated only {len(scenes)} scenes, expected around {TARGET_SCENES} "
+            f"(output may have been truncated by num_predict)"
+        )
 
     # scene_noを1始まりの連番に振り直す(欠番/重複対策)
     required_keys = ("narration", "image_prompt", "motion_prompt")
