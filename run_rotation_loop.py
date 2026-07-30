@@ -1,9 +1,16 @@
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 import psycopg2
+
+# サブプロセス(run_pipeline.py/run_news_pipeline.py以下、全ての子プロセスに継承される)の
+# 標準出力バッファリングを無効化する。ファイルへのリダイレクト時はデフォルトで
+# ブロックバッファリングされ、クラッシュ時にバッファ内容がフラッシュされず
+# ログから失われることがあったため
+os.environ["PYTHONUNBUFFERED"] = "1"
 
 DB_DSN = "dbname=video_pipeline"
 
