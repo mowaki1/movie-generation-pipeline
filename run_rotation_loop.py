@@ -32,6 +32,9 @@ ALL_GENRES = DRAMA_TRIVIA_GENRES + STUDY_GENRES + NEWS_GENRES
 # 手動アップロードでの目視確認が一巡したとみなす
 AUTO_UPLOAD_REVIEW_THRESHOLD = 2
 
+# ITニュース・金融ニュースは反応が良いため、他ジャンルの2倍の頻度で回す
+DOUBLE_FREQUENCY_NEWS_GENRES = [10002, 10004]
+
 REST_SECONDS = 1 * 3600
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -150,9 +153,11 @@ def main():
             run_drama_or_study(conn, genre_id)
         rest()
 
-        # 10000番台 全て
+        # 10000番台 全て(ITニュース・金融ニュースは反応が良いため2倍の頻度)
         for genre_id in NEWS_GENRES:
             run_news(conn, genre_id)
+            if genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
+                run_news(conn, genre_id)
         rest()
 
         if not auto_upload_announced and all_genres_reviewed_twice(conn):
