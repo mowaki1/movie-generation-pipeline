@@ -40,6 +40,7 @@ VARIANT_TO_GENRE = {
 }
 
 CANDIDATE_LIMIT = 30
+COVERED_LOOKBACK_LIMIT = 20
 RELATED_ARTICLES_LIMIT = 5
 WEB_SEARCH_RESULTS = 5
 TARGET_SCENES = 24
@@ -93,6 +94,48 @@ SELECT_PROMPT_TEMPLATE = """以下は直近のニュース記事一覧です(ID:
 """
 
 
+# コサイン距離(埋め込み)だけでは、報じている媒体・言語・切り口が違うだけで
+# 同じ出来事を報じた記事でも距離が大きく開いてしまい、重複として検知できない
+# ケースがあった(実測: 同一事件でも0.19〜0.40)。そのため記事選定の段階で、
+# 直近カバー済み記事のタイトル/要約をLLMに提示し、「同じ出来事かどうか」を
+# 意味的に判断させた上で選ばせる
+SELECT_WITH_COVERED_PROMPT_TEMPLATE = """以下は直近で動画化済み(カバー済み)のニュース一覧です(ID: タイトル / 要約)。
+
+カバー済み一覧:
+{covered_listing}
+
+以下は今回の候補記事一覧です(ID: タイトル / 要約)。
+
+候補記事一覧:
+{candidate_listing}
+
+候補記事の中から、カバー済み一覧のどの記事とも異なる出来事を報じている記事のうち、
+最も重要・興味深い記事を1つ選び、そのIDの数字だけを出力してください。
+
+「異なる出来事」の判定基準:
+・報じている媒体・言語・見出しの切り口が違っていても、同じ事件/発表/事故等を
+  指している場合は「同じ出来事」とみなし、選んではいけない
+・候補記事の中に、カバー済み一覧のいずれとも異なる出来事がひとつもない場合は、
+  IDではなく NONE とだけ出力すること
+
+出力形式: IDの数字のみ、または NONE(説明文は不要です)。
+"""
+
+
+def get_covered_articles(conn, genre_id, limit=COVERED_LOOKBACK_LIMIT):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, summary FROM t_articles
+            WHERE genre_id = %s AND status_id = 9
+            ORDER BY updated_at DESC
+            LIMIT %s
+            """,
+            (genre_id, limit),
+        )
+        return cur.fetchall()
+
+
 def select_article(conn, genre_id):
     with conn.cursor() as cur:
         cur.execute(
@@ -109,11 +152,44 @@ def select_article(conn, genre_id):
     if not candidates:
         raise RuntimeError(f"no candidate articles for genre_id={genre_id}")
 
+    valid_ids = {c[0] for c in candidates}
+    covered = get_covered_articles(conn, genre_id)
+
+    if covered:
+        covered_listing = "\n".join(
+            f"{aid}: {title}\n  {summary}" for aid, title, summary in covered
+        )
+        candidate_listing = "\n".join(
+            f"{aid}: {title}\n  {summary}" for aid, title, summary in candidates
+        )
+        response = ask_ollama(
+            SELECT_WITH_COVERED_PROMPT_TEMPLATE.format(
+                covered_listing=covered_listing,
+                candidate_listing=candidate_listing,
+            ),
+            num_predict=64,
+        )
+
+        if "NONE" in response.upper():
+            raise RuntimeError(
+                f"no fresh (non-duplicate) candidate articles for genre_id={genre_id} "
+                f"(all candidates judged same-event as already-covered articles)"
+            )
+
+        match = re.search(r"\d+", response)
+        if match and int(match.group()) in valid_ids:
+            return int(match.group())
+
+        # LLMが指示形式を守らなかった場合は、カバー済み考慮なしの選定にフォールバックする
+        print(
+            f"WARNING: dedup-aware selection returned unparseable response: {response!r}, "
+            f"falling back to plain selection"
+        )
+
     listing = "\n".join(f"{aid}: {title}\n  {summary}" for aid, title, summary in candidates)
     response = ask_ollama(SELECT_PROMPT_TEMPLATE.format(listing=listing), num_predict=64)
 
     match = re.search(r"\d+", response)
-    valid_ids = {c[0] for c in candidates}
     if not match or int(match.group()) not in valid_ids:
         raise RuntimeError(f"could not parse a valid article id from: {response!r}")
 
