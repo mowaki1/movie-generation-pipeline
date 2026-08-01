@@ -20,7 +20,10 @@ prompt_suffix = "photojournalism,RAW photo,ultra realistic,DSLR,85mm lens,skin t
 
 # "NOT illustration"のような否定文は拡散モデルに効きにくいため、
 # true_cfg_scaleによる本物のネガティブプロンプトとして分離して与える。
-negative_prompt = "illustration,anime,cartoon,3D render,CGI,digital painting,drawing,concept art,watermark,stock photo watermark,logo,text overlay,blurry,low quality"
+# text/writing系は、カルテ・書類・モニター画面・掲示物等に、日本語でも英語でもない
+# 読めない偽文字が写り込む問題(視聴者にAI生成だと気づかれる典型的な違和感)を
+# 抑制するために追加した
+negative_prompt = "illustration,anime,cartoon,3D render,CGI,digital painting,drawing,concept art,watermark,stock photo watermark,logo,text overlay,blurry,low quality,text,writing,letters,words,illegible text,gibberish text,captions,subtitles"
 
 pipe = FluxPipeline.from_pretrained(
     model_id,
