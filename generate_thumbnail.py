@@ -67,12 +67,13 @@ YouTubeサムネイルに載せる、短く強いキャッチコピーと、サ�
 
 タイトル: {title}
 あらすじ: {synopsis}
-
+{character_section}
 条件:
 ・catchphraseは日本語で10〜15字程度、感情を煽る短い言葉にすること
 ・image_promptは英語で、クローズアップの感情的な構図にすること
 ・image_promptでは、画面の左右どちらか半分程度に文字を載せる余白ができるような構図を意識すること(人物やモノを片側に寄せる等)
 ・写実的(写真調)な描写にすること
+・登場人物情報がある場合、その年齢・性別・外見に忠実な人物を描写すること(実際の動画の内容と矛盾する人物を描かない)
 
 出力形式(JSON以外の文字列は一切出力しないこと):
 {{
@@ -170,9 +171,22 @@ def main():
         # synopsisが空の場合、先頭シーンのナレーションで代用する
         synopsis = " ".join(scene["narration"] for scene in story["scenes"][:3])
 
+    # character_bible.txtがあれば(ニュース系には無い)、登場人物の実際の年齢・性別・
+    # 外見をサムネイルにも反映させ、動画本編の内容と食い違わないようにする
+    character_section = ""
+    character_bible_path = OUTDIR / "character_bible.txt"
+    if character_bible_path.exists():
+        character_bible_text = character_bible_path.read_text(encoding="utf-8").strip()
+        if character_bible_text:
+            character_section = f"登場人物:\n{character_bible_text}\n"
+
     print("generating catchphrase and thumbnail prompt...")
     response = ask_ollama(
-        CATCHPHRASE_PROMPT_TEMPLATE.format(title=title, synopsis=synopsis[:1000])
+        CATCHPHRASE_PROMPT_TEMPLATE.format(
+            title=title,
+            synopsis=synopsis[:1000],
+            character_section=character_section,
+        )
     )
     data = json.loads(strip_code_fence(response))
     catchphrase = data["catchphrase"]
