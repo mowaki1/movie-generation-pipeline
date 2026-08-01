@@ -340,7 +340,21 @@ def main():
         print(f"  web: {r.get('title', '')}")
 
     print("generating script...")
-    title, scenes = generate_script(main_article, related_articles, web_results)
+    # LLMが一部シーンでnarration等を省略することがある(視覚重視のシーンで
+    # 起こりやすい既知の現象)。同じ記事・関連情報のまま数回re試行してから諦める
+    GENERATE_SCRIPT_MAX_RETRIES = 3
+    title = None
+    scenes = None
+    for attempt in range(1, GENERATE_SCRIPT_MAX_RETRIES + 1):
+        try:
+            title, scenes = generate_script(main_article, related_articles, web_results)
+            break
+        except Exception as e:
+            print(f"generate_script failed (試行 {attempt}/{GENERATE_SCRIPT_MAX_RETRIES}): {e}")
+
+    if title is None:
+        print(f"ERROR: generate_script が{GENERATE_SCRIPT_MAX_RETRIES}回試行しても失敗しました")
+        raise SystemExit(1)
     # ニュースは鮮度が重要なため、動画タイトルに生成日を付与する
     # (strftimeの%m/%dはゼロ埋めされるため、非ゼロ埋めで直接組み立てる)
     today = date.today()
