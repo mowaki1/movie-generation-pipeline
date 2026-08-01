@@ -16,11 +16,83 @@ ACT_DESCRIPTIONS = [
     "エピローグ・教訓・余韻",
 ]
 
-# 10段階(Act)をVIDEO_LENGTHに応じて比例配分する。
+# YouTube視聴維持率の実測データで、Act1(静かな現状紹介)から入る構成だと
+# 冒頭数分で視聴者の大半が離脱していることが判明した。そのため本編の前に、
+# クライマックス(Act9)を断片的に見せる「コールドオープン」を挿入し、
+# 「なぜこうなったのか」で本編に引き込む構成にする
+TEASER_SCENES = 2
+CLIMAX_TEXT = design_json["story_structure"]["act9"]
+
+teaser_prompt = f"""
+{BASE}
+
+以下の設計書のクライマックス(第9段階)の展開を使い、動画の冒頭に置く
+「コールドオープン(掴み)」の骨子を scene_no 1 から {TEASER_SCENES} までだけ作ってください。
+
+クライマックスの展開：
+{CLIMAX_TEXT}
+
+これは本編ではなく、視聴者を引き込むための予告的な冒頭シーンです。
+
+条件：
+- 状況の全てを説明せず、断片的・示唆的な描写に留める(何が起きたのか気になる終わり方にする)
+- 感情が最も動く一瞬(表情、セリフ、行動)を切り取る
+- 「なぜこうなったのか」を視聴者が知りたくなるように終える
+- 各summaryは30〜80文字
+- narration, image_prompt, motion_prompt は書かない
+
+出力は以下の形式のみ。
+JSON禁止。
+Markdown禁止。
+説明文禁止。
+
+形式：
+1|要約
+2|要約
+
+重要：
+必ず次の形式だけで出力すること。
+JSONを書いてはいけない。
+{{ }} を使ってはいけない。
+"scene_no" や "summary" という文字を書いてはいけない。
+scene_no 1 から {TEASER_SCENES} まで、全番号を1行ずつ出力すること。
+
+設計書：
+{json.dumps(design_json, ensure_ascii=False, indent=2)}
+"""
+
+teaser_text = ask(
+    teaser_prompt,
+    filename="02_outline_teaser_raw.txt",
+    num_predict=2048,
+)
+
+try:
+    teaser_part = parse_pipe_outline(teaser_text, 1, TEASER_SCENES)
+except Exception as e:
+    print(f"ERROR: teaser outline parse failed: {e}")
+    print(teaser_text)
+    raise SystemExit(1)
+
+if len(teaser_part) != TEASER_SCENES:
+    print(f"ERROR: teaser outline が {len(teaser_part)} 件です")
+    print(teaser_text)
+    raise SystemExit(1)
+
+for x in teaser_part:
+    outline.append({
+        "scene_no": int(x["scene_no"]),
+        "summary": x["summary"]
+    })
+
+print(f"teaser outline: {len(teaser_part)}")
+
+# 10段階(Act)を、コールドオープン分を除いた残りシーン数に応じて比例配分する。
 # 固定10シーン刻み(STEP)だとVIDEO_LENGTHを短縮した際に、
 # Act7以降(クライマックス・大逆転・エピローグ)が一度も生成されず
 # 物語が完結しないまま終わる不具合があったため、動的に算出する
-ACT_BOUNDARIES = [1 + (VIDEO_LENGTH * i) // 10 for i in range(10)] + [VIDEO_LENGTH + 1]
+REMAINING_LENGTH = VIDEO_LENGTH - TEASER_SCENES
+ACT_BOUNDARIES = [TEASER_SCENES + 1 + (REMAINING_LENGTH * i) // 10 for i in range(10)] + [VIDEO_LENGTH + 1]
 
 for act_index in range(10):
     start = ACT_BOUNDARIES[act_index]
