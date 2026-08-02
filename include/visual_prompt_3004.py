@@ -60,6 +60,16 @@ The generated image should look like a high-quality modern educational documenta
 Depict ethnically Japanese people in a contemporary Japanese setting (modern homes, offices, cafes, streets) unless the narration explicitly describes a different country.
 Do not depict European people or Western settings unless they are explicitly mentioned in the narration.
 
+Diffusion models cannot reliably render legible text, especially long or complex text.
+However, short well-known literal terms (roughly 4-6 characters, e.g. "NISA", "iDeCo")
+have a much higher chance of rendering correctly than free-form sentences or multi-item
+lists. If the narration mentions a specific short term, product name, or service name,
+you may include that exact literal word as a label in the image_prompt (e.g., a chart
+labeled "NISA" or "iDeCo"). Do NOT invent or write out longer text such as full legends,
+axis labels, multiple data labels, sentences, or on-screen UI text; describe those parts
+of the chart, graph, whiteboard, document, or screen as blurred, abstract, or out-of-focus
+instead.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English

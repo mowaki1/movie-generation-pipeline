@@ -21,6 +21,12 @@ If the narration mentions a specific animal, food, everyday object, or natural p
 If ordinary people are shown, depict modern ordinary Japanese people in everyday settings unless otherwise specified.
 Do not invent named characters; this is a factual trivia video, not a drama.
 
+Diffusion models cannot reliably render legible text, so requesting it produces garbled,
+unreadable characters. Do NOT describe readable text, numbers, labels, chart axis labels,
+graph data labels, or on-screen UI text in the image_prompt. If the narration mentions a
+chart, graph, whiteboard, document, sign, book, or screen, describe it as a blurred, abstract,
+or out-of-focus visual element without legible text or data labels.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English

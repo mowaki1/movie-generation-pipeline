@@ -24,7 +24,7 @@ THUMBNAIL_WIDTH = 1280
 THUMBNAIL_HEIGHT = 720
 
 FLUX_MODEL_ID = "black-forest-labs/FLUX.1-dev"
-NEGATIVE_PROMPT = "illustration,anime,cartoon,3D render,CGI,digital painting,drawing,concept art,watermark,stock photo watermark,logo,text overlay,blurry,low quality"
+NEGATIVE_PROMPT = "illustration,anime,cartoon,3D render,CGI,digital painting,drawing,concept art,watermark,stock photo watermark,logo,text overlay,blurry,low quality,text,writing,letters,words,illegible text,gibberish text,captions,subtitles"
 
 
 def ask_ollama(prompt, num_predict=1024):

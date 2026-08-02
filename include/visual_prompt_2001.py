@@ -59,6 +59,12 @@ The generated image should look like a high-quality historical documentary.
 If the narration describes Japanese history, depict ethnically Japanese people with historically accurate Japanese architecture, clothing, weapons, landscapes, and cultural elements appropriate for that specific era.
 Do not depict European people, Western architecture, or Western weapons unless they are explicitly mentioned in the narration.
 
+Diffusion models cannot reliably render legible text, so requesting it produces garbled,
+unreadable characters. Do NOT describe readable text, numbers, labels, chart axis labels,
+graph data labels, or on-screen UI text in the image_prompt. If the narration mentions a
+chart, graph, whiteboard, document, sign, book, or screen, describe it as a blurred, abstract,
+or out-of-focus visual element without legible text or data labels.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English

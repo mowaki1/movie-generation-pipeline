@@ -1,4 +1,4 @@
-﻿visual_prompt = f"""
+visual_prompt = f"""
 Create image_prompt and motion_prompt.
 
 Output JSON only.
@@ -49,6 +49,12 @@ Only characters defined in the design document may appear.
 
 If a character is not defined in the design document,
 do not mention that character.
+
+Diffusion models cannot reliably render legible text, so requesting it produces garbled,
+unreadable characters. Do NOT describe readable text, numbers, labels, chart axis labels,
+graph data labels, or on-screen UI text in the image_prompt. If the narration mentions a
+chart, graph, whiteboard, document, sign, book, or screen, describe it as a blurred, abstract,
+or out-of-focus visual element without legible text or data labels.
 
 Output rules:
 - image_prompt: English

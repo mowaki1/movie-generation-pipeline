@@ -58,6 +58,12 @@ Maintain historical accuracy and cultural authenticity.
 Avoid modern objects, anachronisms, or elements mixed in from an unrelated civilization, era, or region.
 The generated image should look like a high-quality historical documentary.
 
+Diffusion models cannot reliably render legible text, so requesting it produces garbled,
+unreadable characters. Do NOT describe readable text, numbers, labels, chart axis labels,
+graph data labels, or on-screen UI text in the image_prompt. If the narration mentions a
+chart, graph, whiteboard, document, sign, book, or screen, describe it as a blurred, abstract,
+or out-of-focus visual element without legible text or data labels.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English
