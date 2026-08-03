@@ -123,17 +123,27 @@ def repair_json_array(text):
 
     return text
 
+def normalize_name(name):
+    # LLMがキャラクター名を出力する際、design_json通りの表記("如月 冴子"のように
+    # 姓名間にスペースあり)と、スペース無し("如月冴子")の両方が混在して出力される
+    # ことがあり、単純な文字列一致だと後者を見逃して外見情報の注入に失敗する
+    # (→ 民族・性別等の指定が無いまま画像生成され、西洋人として描画されてしまう)
+    # ため、比較前に半角/全角スペースを除去して揺れを吸収する
+    return name.replace(" ", "").replace("　", "")
+
 def find_characters(text, design_json):
     result = []
+    normalized_text = normalize_name(text)
 
     for c in design_json["characters"]:
-        if c["name"] in text:
+        if normalize_name(c["name"]) in normalized_text:
             result.append(c)
 
     return result
 
 def find_active_characters(text, design_json):
     active = []
+    normalized_text = normalize_name(text)
 
     for c in design_json.get("characters", []):
         name = c.get("name", "")
@@ -143,7 +153,7 @@ def find_active_characters(text, design_json):
 
         base_name = name.split("（")[0].strip()
 
-        if name in text or base_name in text:
+        if normalize_name(name) in normalized_text or normalize_name(base_name) in normalized_text:
             active.append(c)
 
     return active
