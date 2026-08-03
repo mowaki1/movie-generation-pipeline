@@ -79,23 +79,35 @@ with open(INCLUDE_PATH / f"base_{args[1]}.py", "r", encoding="utf-8-sig") as f:
 with open(INCLUDE_PATH / f"design_prompt_{args[1]}.py", "r", encoding="utf-8-sig") as f:
     exec(f.read())
 
-design_text = ask(
-    design_prompt,
-    filename="01_design.json",
-    num_predict=4096,
-)
+# LLMがJSON構文を1箇所でも崩す(クォート抜け等)とdesign全体のパースが失敗し、
+# 後続のoutline/narrationと違ってここだけリトライが無く即座にジョブ全体が
+# 失敗していたため、他の工程と同様に数回re試行してから諦めるようにする
+DESIGN_MAX_RETRIES = 3
+design_json = None
+for attempt in range(1, DESIGN_MAX_RETRIES + 1):
+    design_text = ask(
+        design_prompt,
+        filename="01_design.json",
+        num_predict=4096,
+    )
 
-# その後Character Bible生成
-# まずJSON化
-design_json = safe_json_loads(design_text, {})
-design_json["title"] = MOVIE_THEME
+    # その後Character Bible生成
+    # まずJSON化
+    candidate_json = safe_json_loads(design_text, {})
+    candidate_json["title"] = MOVIE_THEME
 
-print(json.dumps(design_json, ensure_ascii=False, indent=2))
+    if "story_structure" in candidate_json:
+        design_json = candidate_json
+        break
 
-if "story_structure" not in design_json:
-    print("ERROR: story_structure がありません")
+    print(f"design生成が壊れたJSONを返しました (試行 {attempt}/{DESIGN_MAX_RETRIES})")
+
+if design_json is None:
+    print(f"ERROR: design生成が{DESIGN_MAX_RETRIES}回試行しても story_structure を含みませんでした")
     print(design_text)
     raise SystemExit(1)
+
+print(json.dumps(design_json, ensure_ascii=False, indent=2))
     
 # Character Bible生成
 character_bible = build_character_bible(design_json)
