@@ -31,6 +31,14 @@ pipeline_no = args[2]
 OUTDIR = Path(f"jobs/story_pipeline{pipeline_no}")
 token_path = CREDENTIALS_DIR / f"token_{genre_id}.json"
 
+video_id_path = OUTDIR / "youtube_video_id.txt"
+if video_id_path.exists():
+    # 他の工程と同様、既にアップロード済みなら再実行しない
+    # (後続工程の失敗でrun_news_pipeline.py全体がリトライされた際、
+    # 同じ動画を重複投稿してしまうのを防ぐ)
+    print(f"skip (cached): {video_id_path}")
+    raise SystemExit(0)
+
 if not token_path.exists():
     print(f"ERROR: {token_path} がありません。先にauthorize_youtube.py(Windows側)で認証してください。")
     raise SystemExit(1)
