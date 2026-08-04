@@ -73,7 +73,9 @@ body = {
         "description": description,
         "tags": tags,
         "categoryId": "25",  # News & Politics
-        "defaultLanguage": "ja",
+        # defaultLanguage(タイトルと説明の言語)を設定すると、YouTube側の
+        # 自動字幕が生成・表示されるようになることが実機での比較で確認された
+        # ため外している。defaultAudioLanguageは音声言語の申告として残す
         "defaultAudioLanguage": "ja",
     },
     "status": {
