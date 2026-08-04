@@ -13,6 +13,7 @@ from pathlib import Path
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
@@ -86,11 +87,17 @@ print(f"uploaded (limited public/限定公開): https://www.youtube.com/watch?v=
 
 thumbnail_path = OUTDIR / "thumbnail.png"
 if thumbnail_path.exists():
-    youtube.thumbnails().set(
-        videoId=video_id,
-        media_body=MediaFileUpload(str(thumbnail_path)),
-    ).execute()
-    print("thumbnail set")
+    # ニュース系チャンネルは電話番号確認が未完了で、カスタムサムネイルの
+    # アップロード権限が無い(403 forbidden)。動画本体のアップロードは既に
+    # 成功しているので、ここで失敗してもジョブ全体は失敗させない
+    try:
+        youtube.thumbnails().set(
+            videoId=video_id,
+            media_body=MediaFileUpload(str(thumbnail_path)),
+        ).execute()
+        print("thumbnail set")
+    except HttpError as e:
+        print(f"WARNING: thumbnail set failed (video upload itself succeeded): {e}")
 
 (OUTDIR / "youtube_video_id.txt").write_text(video_id, encoding="utf-8")
 print(f"done: {OUTDIR / 'youtube_video_id.txt'}")
