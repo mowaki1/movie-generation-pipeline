@@ -19,6 +19,8 @@
 !/create_tables_video.sql
 !/add_news_genres_to_video_db.sql
 !/import_movie_titles.py
+!/authorize_youtube.py
+!/upload_youtube.py
 !/include/
 !/include/**
 !/titles/
