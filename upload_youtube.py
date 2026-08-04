@@ -65,10 +65,15 @@ body = {
         "description": description,
         "tags": tags,
         "categoryId": "25",  # News & Politics
+        "defaultLanguage": "ja",
+        "defaultAudioLanguage": "ja",
     },
     "status": {
         "privacyStatus": "unlisted",
         "selfDeclaredMadeForKids": False,
+        # 実在の出来事を写実的なAI生成画像で描いているため、YouTubeの
+        # 「AIで改変・合成されたリアルなコンテンツ」開示対象に該当する
+        "containsSyntheticMedia": True,
     },
 }
 
