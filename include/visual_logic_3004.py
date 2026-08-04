@@ -34,7 +34,7 @@ appearance_prefix = []
 
 for c in active_characters:
     appearance_prefix.append(
-        f'{c["name"]}, {c["appearance"]}'
+        f'({c["name"]}: {c["appearance"]})'
     )
 
 for c in active_characters:
