@@ -20,6 +20,12 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 CREDENTIALS_DIR = Path.home() / "roujin_home_senka" / "credentials"
 YOUTUBE_TITLE_MAX_CHARS = 100  # YouTube側の上限
 
+DEFAULT_CATEGORY_ID = "25"  # News & Politics(ニュース系10001〜10009向け)
+CATEGORY_ID_BY_GENRE = {
+    "3003": "27",  # ITの教室 → Education
+    "3004": "27",  # 資産運用系 → Education
+}
+
 args = sys.argv
 if len(args) < 3:
     print(f"usage: python {Path(args[0]).name} <genre_id> <pipeline_no>")
@@ -72,7 +78,7 @@ body = {
         "title": title,
         "description": description,
         "tags": tags,
-        "categoryId": "25",  # News & Politics
+        "categoryId": CATEGORY_ID_BY_GENRE.get(genre_id, DEFAULT_CATEGORY_ID),
         # defaultLanguage(タイトルと説明の言語)を設定すると、YouTube側の
         # 自動字幕が生成・表示されるようになることが実機での比較で確認された
         # ため外している。defaultAudioLanguageは音声言語の申告として残す

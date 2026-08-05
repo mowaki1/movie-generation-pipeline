@@ -14,6 +14,10 @@ theme = args[3]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+# YouTube自動投稿(限定公開)は、視聴確認・OAuth認証が済んだジャンルのみ有効にする。
+# 他の未認証ジャンルにも一律で組み込むと、tokenが無く失敗してしまうため。
+YOUTUBE_UPLOAD_ENABLED_VARIANTS = {"3003", "3004"}
+
 STEPS = [
     ["generate_story7.py", variant_id, pipeline_no, theme],
     ["generate_images2.py", pipeline_no],
@@ -21,8 +25,12 @@ STEPS = [
     ["generate_movie4.py", pipeline_no],
     ["generate_description.py", pipeline_no],
     ["generate_thumbnail.py", pipeline_no],
-    ["send_completion_email.py", pipeline_no],
 ]
+
+if variant_id in YOUTUBE_UPLOAD_ENABLED_VARIANTS:
+    STEPS.append(["upload_youtube.py", variant_id, pipeline_no])
+
+STEPS.append(["send_completion_email.py", pipeline_no])
 
 
 def main() -> None:
