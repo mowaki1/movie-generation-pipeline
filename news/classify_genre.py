@@ -5,7 +5,7 @@ import requests
 
 DB_DSN = "dbname=news_pipeline"
 
-MODEL = "gemma4:31b-it-bf16"
+MODEL = "hf.co/mradermacher/Llama-3.3-Swallow-70B-Instruct-v0.4-GGUF:Q5_K_M"
 API_URL = "http://localhost:11434/api/generate"
 
 GENRES = {

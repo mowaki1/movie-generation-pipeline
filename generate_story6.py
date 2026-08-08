@@ -1,4 +1,4 @@
-﻿import requests
+import requests
 import json
 import time
 import re
@@ -13,7 +13,7 @@ if len(args) < 3:
     print(f"usage: python {Path(args[0]).name} <pipeline_no> <theme>")
     raise SystemExit(1)
 
-MODEL = "gemma4:31b-it-bf16"
+MODEL = "hf.co/mradermacher/Llama-3.3-Swallow-70B-Instruct-v0.4-GGUF:Q5_K_M"
 API_URL = "http://localhost:11434/api/generate"
 MOVIE_THEME = args[2]
 

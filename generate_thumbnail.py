@@ -16,7 +16,7 @@ if len(args) < 2:
 
 OUTDIR = Path(f"jobs/story_pipeline{args[1]}")
 
-MODEL = "gemma4:31b-it-bf16"
+MODEL = "hf.co/mradermacher/Llama-3.3-Swallow-70B-Instruct-v0.4-GGUF:Q5_K_M"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 FONT_NAME = "BIZ UDPGothic"  # 字幕と同じフォントで統一
 
