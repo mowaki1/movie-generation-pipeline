@@ -374,7 +374,8 @@ def build_script_prompt(main_article, related_articles, web_results):
     ) or "(該当なし)"
 
     total_material_chars = len(main_body) + len(related_text) + len(web_text)
-    if total_material_chars < THIN_MATERIAL_CHARS_THRESHOLD:
+    is_thin = total_material_chars < THIN_MATERIAL_CHARS_THRESHOLD
+    if is_thin:
         length_instruction = (
             "・軸となる記事・関連材料の情報量が実際に乏しいため、"
             "無理に水増しせず、内容に見合った少ないシーン数で構成してよい"
@@ -387,7 +388,7 @@ def build_script_prompt(main_article, related_articles, web_results):
             "材料に基づく詳細な解説・背景説明で厚みを持たせることは推奨する"
         )
 
-    return SCRIPT_PROMPT_TEMPLATE.format(
+    prompt = SCRIPT_PROMPT_TEMPLATE.format(
         target_scenes=TARGET_SCENES,
         length_instruction=length_instruction,
         main_title=main_title,
@@ -395,10 +396,11 @@ def build_script_prompt(main_article, related_articles, web_results):
         related_articles=related_text,
         web_results=web_text,
     )
+    return prompt, is_thin
 
 
 def generate_script(main_article, related_articles, web_results):
-    prompt = build_script_prompt(main_article, related_articles, web_results)
+    prompt, is_thin = build_script_prompt(main_article, related_articles, web_results)
     # TARGET_SCENESを12→24に倍増した際、num_predictが6000のままだと
     # 1シーンあたりの分量から見て上限ギリギリ〜超過し、出力が途中で
     # 切れて実際のシーン数が足りなくなる恐れがあるため、あわせて倍増する
@@ -421,6 +423,15 @@ def generate_script(main_article, related_articles, web_results):
     # 異常な極端に少ない件数だけを弾く
     if len(scenes) < 3:
         raise RuntimeError(f"generated only {len(scenes)} scenes, too few to be a valid script")
+    # 材料が薄くない(is_thin=False)と客観的に判定したにもかかわらず、
+    # プロンプトの「厚みを持たせる」指示を無視して極端に少ないシーン数
+    # しか生成しないケースがあった。プロンプトの指示だけでは強制力が
+    # ないため、この場合はリトライさせる(材料が実際に薄い場合は対象外)
+    if not is_thin and len(scenes) < TARGET_SCENES * 0.6:
+        raise RuntimeError(
+            f"material was not thin but only {len(scenes)} scenes were generated "
+            f"(expected at least {int(TARGET_SCENES * 0.6)})"
+        )
 
     # scene_noを1始まりの連番に振り直す(欠番/重複対策)
     required_keys = ("narration", "image_prompt", "motion_prompt")
