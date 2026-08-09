@@ -91,25 +91,34 @@ scene_no {start} から {end} まで、全番号を1行ずつ出力すること�
 
     predict = 16000
 
-    outline_text = ask(
-        outline_prompt,
-        filename=f"02_outline_{start:03d}_{end:03d}_raw.txt",
-        num_predict=4096,
-    )
+    OUTLINE_MAX_RETRIES = 3
+    part = None
+    for attempt in range(1, OUTLINE_MAX_RETRIES + 1):
+        outline_text = ask(
+            outline_prompt,
+            filename=f"02_outline_{start:03d}_{end:03d}_raw.txt",
+            num_predict=4096,
+        )
 
-    try:
-        part = parse_pipe_outline(outline_text, start, end)
-    except Exception as e:
-        print(f"ERROR: outline {start}-{end} parse failed: {e}")
+        try:
+            candidate = parse_pipe_outline(outline_text, start, end)
+        except Exception as e:
+            print(f"outline {start}-{end} parse failed (試行 {attempt}/{OUTLINE_MAX_RETRIES}): {e}")
+            continue
+
+        if len(candidate) != STEP:
+            print(f"outline {start}-{end} が {len(candidate)} 件でした (試行 {attempt}/{OUTLINE_MAX_RETRIES})")
+            continue
+
+        part = candidate
+        break
+
+    if part is None:
+        print(f"ERROR: outline {start}-{end} が{OUTLINE_MAX_RETRIES}回試行しても失敗しました")
         print(outline_text)
         raise SystemExit(1)
 
     print(f"outline {start}-{end}: {len(part)}")
-
-    if len(part) != STEP:
-        print(f"ERROR: outline {start}-{end} が {len(part)} 件です")
-        print(outline_text)
-        raise SystemExit(1)
 
     for x in part:
         outline.append({

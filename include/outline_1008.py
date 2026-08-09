@@ -61,21 +61,30 @@ scene_no 1 から {TEASER_SCENES} まで、全番号を1行ずつ出力するこ
 {json.dumps(design_json, ensure_ascii=False, indent=2)}
 """
 
-teaser_text = ask(
-    teaser_prompt,
-    filename="02_outline_teaser_raw.txt",
-    num_predict=2048,
-)
+TEASER_MAX_RETRIES = 3
+teaser_part = None
+for attempt in range(1, TEASER_MAX_RETRIES + 1):
+    teaser_text = ask(
+        teaser_prompt,
+        filename="02_outline_teaser_raw.txt",
+        num_predict=2048,
+    )
 
-try:
-    teaser_part = parse_pipe_outline(teaser_text, 1, TEASER_SCENES)
-except Exception as e:
-    print(f"ERROR: teaser outline parse failed: {e}")
-    print(teaser_text)
-    raise SystemExit(1)
+    try:
+        candidate = parse_pipe_outline(teaser_text, 1, TEASER_SCENES)
+    except Exception as e:
+        print(f"teaser outline parse failed (試行 {attempt}/{TEASER_MAX_RETRIES}): {e}")
+        continue
 
-if len(teaser_part) != TEASER_SCENES:
-    print(f"ERROR: teaser outline が {len(teaser_part)} 件です")
+    if len(candidate) != TEASER_SCENES:
+        print(f"teaser outline が {len(candidate)} 件でした (試行 {attempt}/{TEASER_MAX_RETRIES})")
+        continue
+
+    teaser_part = candidate
+    break
+
+if teaser_part is None:
+    print(f"ERROR: teaser outlineが{TEASER_MAX_RETRIES}回試行しても失敗しました")
     print(teaser_text)
     raise SystemExit(1)
 
@@ -156,26 +165,35 @@ scene_no {start} から {end} まで、全番号を1行ずつ出力すること�
 """
     predict = 16000
 
-    outline_text = ask(
-        outline_prompt,
-        filename=f"02_outline_{start:03d}_{end:03d}_raw.txt",
-        num_predict=4096,
-    )
+    OUTLINE_MAX_RETRIES = 3
+    part = None
+    for attempt in range(1, OUTLINE_MAX_RETRIES + 1):
+        outline_text = ask(
+            outline_prompt,
+            filename=f"02_outline_{start:03d}_{end:03d}_raw.txt",
+            num_predict=4096,
+        )
 
-    try:
-        part = parse_pipe_outline(outline_text, start, end)
-    except Exception as e:
-        print(f"ERROR: outline {start}-{end} parse failed: {e}")
+        try:
+            candidate = parse_pipe_outline(outline_text, start, end)
+        except Exception as e:
+            print(f"outline {start}-{end} parse failed (試行 {attempt}/{OUTLINE_MAX_RETRIES}): {e}")
+            continue
+
+        expected_count = end - start + 1
+        if len(candidate) != expected_count:
+            print(f"outline {start}-{end} が {len(candidate)} 件でした (試行 {attempt}/{OUTLINE_MAX_RETRIES})")
+            continue
+
+        part = candidate
+        break
+
+    if part is None:
+        print(f"ERROR: outline {start}-{end} が{OUTLINE_MAX_RETRIES}回試行しても失敗しました")
         print(outline_text)
         raise SystemExit(1)
 
     print(f"outline {start}-{end}: {len(part)}")
-
-    expected_count = end - start + 1
-    if len(part) != expected_count:
-        print(f"ERROR: outline {start}-{end} が {len(part)} 件です")
-        print(outline_text)
-        raise SystemExit(1)
 
     for x in part:
         outline.append({
