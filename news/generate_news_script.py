@@ -1,4 +1,5 @@
 import atexit
+import difflib
 import json
 import os
 import re
@@ -396,7 +397,7 @@ def build_script_prompt(main_article, related_articles, web_results):
             "材料に基づく詳細な解説・背景説明で厚みを持たせることは推奨する"
         )
 
-    prompt = SCRIPT_PROMPT_TEMPLATE.format(
+    return SCRIPT_PROMPT_TEMPLATE.format(
         target_scenes=TARGET_SCENES,
         length_instruction=length_instruction,
         main_title=main_title,
@@ -404,11 +405,31 @@ def build_script_prompt(main_article, related_articles, web_results):
         related_articles=related_text,
         web_results=web_text,
     )
-    return prompt, is_thin
+
+
+def find_duplicate_narration_pair(scenes, similarity_threshold=0.75, min_len_for_substring_check=30):
+    # シーン数を目標に近づけようとした際、モデルが本編と無関係な一般論で
+    # 水増しし、最終的には既存シーンとほぼ同一のnarrationを使い回す
+    # ケースがあった(例: 最終シーンが別シーンの文章に一文だけ追加して流用)。
+    # 明確な欠陥として検出しリトライさせる。「一方が他方を丸ごと含む」
+    # ケースはSequenceMatcherの比率だけでは閾値未満になりうるため、
+    # 部分文字列としての包含チェックも別途行う
+    narrations = [s.get("narration", "") for s in scenes]
+    for i in range(len(narrations)):
+        for j in range(i + 1, len(narrations)):
+            a, b = narrations[i], narrations[j]
+            if not a or not b:
+                continue
+            if len(a) >= min_len_for_substring_check and (a in b or b in a):
+                return i + 1, j + 1, 1.0
+            ratio = difflib.SequenceMatcher(None, a, b).ratio()
+            if ratio >= similarity_threshold:
+                return i + 1, j + 1, ratio
+    return None
 
 
 def generate_script(main_article, related_articles, web_results):
-    prompt, is_thin = build_script_prompt(main_article, related_articles, web_results)
+    prompt = build_script_prompt(main_article, related_articles, web_results)
     # TARGET_SCENESを12→24に倍増した際、num_predictが6000のままだと
     # 1シーンあたりの分量から見て上限ギリギリ〜超過し、出力が途中で
     # 切れて実際のシーン数が足りなくなる恐れがあるため、あわせて倍増する
@@ -431,15 +452,6 @@ def generate_script(main_article, related_articles, web_results):
     # 異常な極端に少ない件数だけを弾く
     if len(scenes) < 3:
         raise RuntimeError(f"generated only {len(scenes)} scenes, too few to be a valid script")
-    # 材料が薄くない(is_thin=False)と客観的に判定したにもかかわらず、
-    # プロンプトの「厚みを持たせる」指示を無視して極端に少ないシーン数
-    # しか生成しないケースがあった。プロンプトの指示だけでは強制力が
-    # ないため、この場合はリトライさせる(材料が実際に薄い場合は対象外)
-    if not is_thin and len(scenes) < TARGET_SCENES * 0.6:
-        raise RuntimeError(
-            f"material was not thin but only {len(scenes)} scenes were generated "
-            f"(expected at least {int(TARGET_SCENES * 0.6)})"
-        )
 
     # scene_noを1始まりの連番に振り直す(欠番/重複対策)
     required_keys = ("narration", "image_prompt", "motion_prompt")
@@ -450,6 +462,14 @@ def generate_script(main_article, related_articles, web_results):
             raise RuntimeError(
                 f"LLM output is missing required key(s) {missing} in scene {i}: {scene}"
             )
+
+    dup = find_duplicate_narration_pair(scenes)
+    if dup:
+        i, j, ratio = dup
+        raise RuntimeError(
+            f"scene {i} and scene {j} have near-duplicate narration "
+            f"(similarity={ratio:.2f}), likely low-effort padding"
+        )
 
     return title, scenes
 
