@@ -160,15 +160,17 @@ def make_scene_video(scene_no: int) -> Path:
             encoding="utf-8",
         )
 
-        # 最終結合(movie_raw.mp4作成時)と同じ理由で、念のためここのconcatにも
-        # -fflags +genptsを付けてタイムスタンプ不整合の混入を防ぐ
+        # 最終結合(movie_raw.mp4作成時)と同じ理由で、ここのconcatも
+        # -c copyではなく再エンコードしてタイムスタンプ不整合の混入を防ぐ
         run([
             "ffmpeg", "-y",
-            "-fflags", "+genpts",
             "-f", "concat",
             "-safe", "0",
             "-i", str(list_file),
-            "-c", "copy",
+            "-vf", "format=yuv420p",
+            "-c:v", "h264_nvenc",
+            "-preset", "p4",
+            "-cq", "23",
             str(silent),
         ])
 
@@ -197,18 +199,24 @@ def concat_videos(scene_videos: list[Path]) -> Path:
         encoding="utf-8",
     )
 
-    # 個々のシーン動画自体は正常な長さでも、concatデムクサー+ストリームコピー
-    # (-c copy)だと、入力ファイル内部のタイムスタンプの不整合がオフセット計算に
-    # 積み重なり、結合後のmovie_raw.mp4の長さが数時間規模に異常膨張することが
-    # あった(実測: 個々の動画合計3分弱→結合後4時間)。-fflags +genptsで
-    # タイムスタンプを結合時に再生成させ、この不整合を吸収する
+    # 個々のシーン動画は正常な長さでも、concatデムクサー+ストリームコピー
+    # (-c copy)だと各シーンがh264_nvencで個別にエンコードされているため
+    # コンテナ内タイムスタンプの微妙な不整合を結合時にそのまま引き継いでしまい、
+    # 結合後のmovie_raw.mp4の長さが数時間規模に異常膨張することがあった
+    # (実測: 個々の動画合計3分弱→結合後4時間)。-fflags +genptsは不整合な
+    # タイムスタンプを単調にするだけで根本解決にならず、巨大な値に
+    # 帳尻合わせされて症状が再現した。そのため-c copyをやめ、
+    # デコード→再エンコードすることでffmpegに時間軸を一から生成させる
     run([
         "ffmpeg", "-y",
-        "-fflags", "+genpts",
         "-f", "concat",
         "-safe", "0",
         "-i", str(list_file),
-        "-c", "copy",
+        "-vf", "format=yuv420p",
+        "-c:v", "h264_nvenc",
+        "-preset", "p4",
+        "-cq", "23",
+        "-c:a", "aac",
         str(raw_episode),
     ])
 
