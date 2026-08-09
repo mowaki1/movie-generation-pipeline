@@ -1,6 +1,12 @@
 ﻿
 GARBLED_BYTE_TOKEN_RE = re.compile(r"<0x[0-9A-Fa-f]{2}>")
 
+LEAKED_SPECIAL_TOKENS = ["<|im_end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_start|>"]
+# stopオプションに渡す厳密な文字列とは別に、実際にはトークンの区切り記号が
+# "<\|im_end|>"のようにバックスラッシュを挟む形で崩れて漏れることがあった。
+# 装飾記号のブレを吸収するため、トークン名の部分一致で検出する
+LEAKED_TOKEN_MARKERS = ["im_end", "im_start", "eot_id", "end_of_text"]
+
 
 def has_garbled_byte_tokens(text):
     # llama.cpp/Ollama側がUTF-8として正しく組み立てられなかったトークンを
@@ -8,6 +14,26 @@ def has_garbled_byte_tokens(text):
     # 漢字生成時)。これはPython側の文字化けではなく生成結果自体の破損なので、
     # 検出したら再試行する
     return bool(GARBLED_BYTE_TOKEN_RE.search(text))
+
+
+def strip_leaked_special_tokens(text):
+    # optionsのstopで指定していても、Ollamaがstop文字列を完全には
+    # response から除去しきれず、地の文と同じ行に混入することがある
+    # (実測: 骨子/ナレーションの最終行末尾に"<\|im_end|>"のような崩れた
+    # 形で可視文字として残る)。stopによる一次防御に加え、万一混入した
+    # 場合の二次防御として、トークン名が最初に現れた箇所(装飾記号ごと)
+    # 以降を切り捨てる
+    earliest = None
+    for marker in LEAKED_TOKEN_MARKERS:
+        idx = text.find(marker)
+        if idx == -1:
+            continue
+        cut_start = idx
+        while cut_start > 0 and text[cut_start - 1] in "<|\\":
+            cut_start -= 1
+        if earliest is None or cut_start < earliest:
+            earliest = cut_start
+    return text[:earliest] if earliest is not None else text
 
 
 def ask(prompt, filename=None, num_predict=4096):
@@ -23,13 +49,16 @@ def ask(prompt, filename=None, num_predict=4096):
             "top_p": 0.9,
             "num_ctx": 32768,
             "num_predict": num_predict,
+            # 同じ短いフレーズを延々と繰り返す劣化出力(repetition loop)が
+            # 稀に発生した(例: "<br>"が数百回続く)ことへの緩和策
+            "repeat_penalty": 1.15,
             # Swallow(hf.co経由のGGUF)へ切り替えた際、チャットテンプレートの
             # 終了トークンがOllamaの/api/generate(生の補完API)で正しく解釈
             # されず、"<|im_end|>"等が可視文字として出力され、そこで生成が
             # 早期に打ち切られる不具合が見つかった(outlineの最終シーンが
             # 欠落する形で発覚)。明示的にstopとして指定し、混入・早期打ち切り
             # 両方を防ぐ
-            "stop": ["<|im_end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_start|>"],
+            "stop": LEAKED_SPECIAL_TOKENS,
         },
     }
 
@@ -37,6 +66,7 @@ def ask(prompt, filename=None, num_predict=4096):
         res = requests.post(API_URL, json=payload, timeout=3000)
         res.raise_for_status()
         text = res.json().get("response", "").strip()
+        text = strip_leaked_special_tokens(text).strip()
 
         if len(text) > 50 and not has_garbled_byte_tokens(text):
             if filename:
@@ -367,6 +397,21 @@ def _continue_outline(outline_prompt, candidate, missing, num_predict):
     continued = _extract_pipe_scenes(text, missing[0], missing[-1])
     return continued if len(continued) == len(missing) else None
 
+def is_repetition_garbage(text):
+    # モデルが同じ短いフレーズ("<br>"等)を延々と繰り返すループに陥り、
+    # num_predict上限まで埋め尽くす劣化出力が稀に発生した。先頭の短い
+    # 断片が全体の過半を占める場合、正常な文章ではなく壊れた出力とみなす
+    stripped = text.strip()
+    if len(stripped) < 100:
+        return False
+    for chunk_len in (4, 6, 8, 10, 12):
+        if len(stripped) < chunk_len * 5:
+            continue
+        chunk = stripped[:chunk_len]
+        if chunk.strip() and stripped.count(chunk) * chunk_len > len(stripped) * 0.5:
+            return True
+    return False
+
 def parse_pipe_narration(text, start, end):
     scenes = []
 
@@ -380,7 +425,7 @@ def parse_pipe_narration(text, start, end):
         if m:
             scene_no = int(m.group(1))
             narration = m.group(2).strip()
-            if start <= scene_no <= end:
+            if start <= scene_no <= end and not is_repetition_garbage(narration):
                 scenes.append({
                     "scene_no": scene_no,
                     "narration": narration
@@ -395,7 +440,7 @@ def parse_pipe_narration(text, start, end):
         ):
             scene_no = int(m.group(1))
             narration = m.group(2).strip()
-            if start <= scene_no <= end:
+            if start <= scene_no <= end and not is_repetition_garbage(narration):
                 scenes.append({
                     "scene_no": scene_no,
                     "narration": narration
