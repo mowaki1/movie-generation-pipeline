@@ -200,28 +200,36 @@ def select_article(conn, genre_id):
         candidate_listing = "\n".join(
             f"{aid}: {title}\n  {summary}" for aid, title, summary in candidates
         )
-        response = ask_ollama(
-            SELECT_WITH_COVERED_PROMPT_TEMPLATE.format(
-                covered_listing=covered_listing,
-                candidate_listing=candidate_listing,
-            ),
-            num_predict=64,
-        )
-
-        if "NONE" in response.upper():
-            raise RuntimeError(
-                f"no fresh (non-duplicate) candidate articles for genre_id={genre_id} "
-                f"(all candidates judged same-event as already-covered articles)"
+        # 「NONE」(候補全てがカバー済みと同一事件)は、本当に候補が尽きた
+        # ことを意味するとは限らない。status_id=8の候補が数百件残っている
+        # にもかかわらずNONEと判定されるケースが確認されており、30件の候補と
+        # 数十件のカバー済み記事を突き合わせる複雑な比較判断をモデルが
+        # 誤りやすいことが原因とみられる。即座に失敗とはせず、1回だけ
+        # 再試行し、それでも埒が明かなければ不正な形式の場合と同様に
+        # カバー済み考慮なしの選定にフォールバックする
+        DEDUP_SELECT_MAX_ATTEMPTS = 2
+        response = ""
+        for _ in range(DEDUP_SELECT_MAX_ATTEMPTS):
+            response = ask_ollama(
+                SELECT_WITH_COVERED_PROMPT_TEMPLATE.format(
+                    covered_listing=covered_listing,
+                    candidate_listing=candidate_listing,
+                ),
+                num_predict=64,
             )
 
-        match = re.search(r"\d+", response)
-        if match and int(match.group()) in valid_ids:
-            return int(match.group())
+            if "NONE" in response.upper():
+                continue
 
-        # LLMが指示形式を守らなかった場合は、カバー済み考慮なしの選定にフォールバックする
+            match = re.search(r"\d+", response)
+            if match and int(match.group()) in valid_ids:
+                return int(match.group())
+
+            break
+
         print(
-            f"WARNING: dedup-aware selection returned unparseable response: {response!r}, "
-            f"falling back to plain selection"
+            f"WARNING: dedup-aware selection returned {response!r} "
+            f"(candidates={len(candidates)}, covered={len(covered)}), falling back to plain selection"
         )
 
     listing = "\n".join(f"{aid}: {title}\n  {summary}" for aid, title, summary in candidates)
