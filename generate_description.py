@@ -54,6 +54,36 @@ def strip_code_fence(text):
     return text
 
 
+def extract_first_json_object(text):
+    # モデル(Swallow)がJSON出力の後に余計な説明文を続けて出力することがあり、
+    # json.loadsが"Extra data"で失敗する原因になっていた。ネストしたJSON内の
+    # {}と衝突しないよう、波かっこの対応関係を実際に追跡して最初の完全な
+    # JSONオブジェクトだけを抜き出す
+    start = text.index("{")
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+    raise ValueError("complete JSON object not found")
+
+
 def ask_ollama(prompt, num_predict=800):
     payload = {
         "model": MODEL,
@@ -108,7 +138,7 @@ def main():
     # 後続工程(サムネイル生成のFLUX等)がVRAMを使えるよう、終了時にOllamaのモデルをアンロードする
     subprocess.run(["ollama", "stop", MODEL], check=False)
 
-    data = json.loads(strip_code_fence(response))
+    data = json.loads(extract_first_json_object(strip_code_fence(response)))
     synopsis = data["synopsis"].strip()
     hashtags = data["hashtags"].strip()
     tags = data["tags"]

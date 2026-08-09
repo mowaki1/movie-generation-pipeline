@@ -85,6 +85,36 @@ def strip_code_fence(text):
     return text
 
 
+def extract_first_json_object(text):
+    # モデル(Swallow)がJSON出力の後に余計な説明文を続けて出力することがあり、
+    # json.loadsが"Extra data"で失敗する原因になっていた。ネストしたJSON内の
+    # {}と衝突しないよう、波かっこの対応関係を実際に追跡して最初の完全な
+    # JSONオブジェクトだけを抜き出す
+    start = text.index("{")
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+    raise ValueError("complete JSON object not found")
+
+
 SELECT_PROMPT_TEMPLATE = """以下は直近のニュース記事一覧です(ID: タイトル / 要約)。
 この中から、動画で取り上げるべき最も重要・興味深い記事を1つ選び、そのIDの数字だけを出力してください。
 
@@ -349,7 +379,7 @@ def generate_script(main_article, related_articles, web_results):
     response = ask_ollama(prompt, num_predict=12000)
 
     text = strip_code_fence(response)
-    data = json.loads(text)
+    data = json.loads(extract_first_json_object(text))
 
     title = data.get("title", "").strip()
     scenes = data["scenes"]

@@ -85,10 +85,44 @@ def strip_code_fence(text):
         text = re.sub(r"\n?```$", "", text)
     return text.strip()
 
+def extract_first_json_object(text):
+    # モデル(Swallow)がJSON出力の後に余計な説明文を続けて出力することがあり、
+    # json.loadsが"Extra data"で失敗する原因になっていた。ネストしたJSON内の
+    # {}と衝突しないよう、波かっこの対応関係を実際に追跡して最初の完全な
+    # JSONオブジェクトだけを抜き出す
+    start = text.index("{")
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+    raise ValueError("complete JSON object not found")
+
 def safe_json_loads(text, fallback):
+    cleaned = strip_code_fence(text)
     try:
-        return json.loads(strip_code_fence(text))
+        return json.loads(cleaned)
     except json.JSONDecodeError:
+        pass
+    try:
+        return json.loads(extract_first_json_object(cleaned))
+    except (json.JSONDecodeError, ValueError):
         return fallback
 
 def build_character_bible(design_json):
