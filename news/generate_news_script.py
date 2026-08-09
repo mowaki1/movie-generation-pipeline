@@ -321,10 +321,13 @@ SCRIPT_PROMPT_TEMPLATE = """あなたはニュース解説動画の脚本家で�
 以下の「軸となる記事」と「関連材料」だけを根拠に、日本語のニュース解説動画の台本をJSON形式で作成してください。
 
 重要な制約:
-・軸となる記事および関連材料に書かれていない事実を創作しないこと(ハルシネーション禁止)
+・軸となる記事および関連材料に書かれていない事実を創作しないこと(ハルシネーション禁止)。
+  特に、記事に書かれていない一般的な用途例・利用シーン(「〜にも最適です」「〜にも活用できます」等)を、
+  シーン数を埋めるためだけに創作しないこと
 ・登場人物(キャラクター)は設定しないこと。ナレーターが視聴者に語りかける構成にすること
 ・image_promptは、ニュースの内容を象徴する報道写真・図解・関連する場所や物のクローズアップなど、具体的で写実的な英語の画像生成プロンプトにすること(架空の人物の外見描写は不要)
-・{target_scenes}シーン程度で構成すること
+・{target_scenes}シーン程度を目安とするが、軸となる記事・関連材料の情報量がそれに満たない場合は、
+  無理に水増しせず、内容に見合った少ないシーン数で構成してよい
 ・各シーンのnarrationは2〜4文程度の日本語
 ・titleは、元記事のタイトルを直訳するのではなく、YouTube向けに再構成した日本語の動画タイトル(30字程度、内容を的確に表し興味を引くもの)にすること
 ・最後のシーンのnarrationは、ニュースの締めくくりに続けて、チャンネル登録を自然に促す一言(押し付けがましくならない程度)で終えること
@@ -390,13 +393,14 @@ def generate_script(main_article, related_articles, web_results):
         raise RuntimeError("LLM did not return a title")
     if not scenes:
         raise RuntimeError("LLM returned an empty scenes list")
-    # num_predictの上限に達して途中で出力が切れると、JSON自体は正常でも
-    # シーン数が大きく不足したまま静かに完了してしまうため検知する
-    if len(scenes) < TARGET_SCENES * 0.6:
-        raise RuntimeError(
-            f"generated only {len(scenes)} scenes, expected around {TARGET_SCENES} "
-            f"(output may have been truncated by num_predict)"
-        )
+    # 記事の情報量が乏しい場合はTARGET_SCENESに満たない意図的に短い台本も
+    # 許容する(水増しハルシネーション対策)ため、TARGET_SCENES比での下限
+    # チェックは廃止した。num_predict上限による途中打ち切りは、
+    # extract_first_json_object()が不完全なJSON(閉じ括弧が無い等)を
+    # 検知して例外にするため、そちらで別途捕捉される。ここでは明らかに
+    # 異常な極端に少ない件数だけを弾く
+    if len(scenes) < 3:
+        raise RuntimeError(f"generated only {len(scenes)} scenes, too few to be a valid script")
 
     # scene_noを1始まりの連番に振り直す(欠番/重複対策)
     required_keys = ("narration", "image_prompt", "motion_prompt")
