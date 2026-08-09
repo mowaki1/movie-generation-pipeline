@@ -153,6 +153,17 @@ for start in range(1, VIDEO_LENGTH + 1, 5):
     with open(INCLUDE_PATH / f"narration_prompt_{args[1]}.py", "r", encoding="utf-8-sig") as f:
         exec(f.read())
 
+    # チャンネル登録を促す一言は動画全体で最後のシーンにのみ入れたい。
+    # 以前はbase_*.py側に無条件で「最後のシーンには〜」と書いていたため、
+    # 5シーンごとのチャンクそれぞれが「最後のシーン」だと誤解され、
+    # 動画の途中(各チャンクの末尾)に何度もCTAが挿入されてしまっていた。
+    # ここで本当に動画全体の最終チャンクの場合だけ明示的に指示を追加する
+    if end >= VIDEO_LENGTH:
+        narration_prompt += (
+            f"\n\n重要: scene_no {min(end, VIDEO_LENGTH)}はこの動画全体の最後の"
+            "シーンです。そのnarrationには、物語の余韻を保ったまま、"
+            "チャンネル登録を促す一言を自然に添えること。"
+        )
 
     # LLMが一部のシーン番号を生成せず打ち切ることがある(構文的には正常だが
     # 内容が不完全)。ask()側のリトライ(壊れたバイト列/短すぎる応答)とは
