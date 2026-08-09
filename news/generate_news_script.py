@@ -45,6 +45,11 @@ RELATED_ARTICLES_LIMIT = 5
 WEB_SEARCH_RESULTS = 5
 TARGET_SCENES = 24
 BODY_CHARS_LIMIT = 2000
+# 記事選定は「最も重要・興味深い記事」を選ばせているため、選ばれる記事は
+# 通常ある程度の分量を持つはず。それにもかかわらず動画が短くなる問題が
+# 起きたため、「情報が薄いから短くてよい」をモデルの自己判断任せにせず、
+# 実際の材料の文字数がこの閾値未満の場合だけ短縮を許可する
+THIN_MATERIAL_CHARS_THRESHOLD = 300
 DUPLICATE_DISTANCE_THRESHOLD = 0.15  # コサイン距離。これ未満は「ほぼ同じ出来事の記事」とみなす
 
 
@@ -326,8 +331,7 @@ SCRIPT_PROMPT_TEMPLATE = """あなたはニュース解説動画の脚本家で�
   シーン数を埋めるためだけに創作しないこと
 ・登場人物(キャラクター)は設定しないこと。ナレーターが視聴者に語りかける構成にすること
 ・image_promptは、ニュースの内容を象徴する報道写真・図解・関連する場所や物のクローズアップなど、具体的で写実的な英語の画像生成プロンプトにすること(架空の人物の外見描写は不要)
-・{target_scenes}シーン程度を目安とするが、軸となる記事・関連材料の情報量がそれに満たない場合は、
-  無理に水増しせず、内容に見合った少ないシーン数で構成してよい
+{length_instruction}
 ・各シーンのnarrationは2〜4文程度の日本語
 ・titleは、元記事のタイトルを直訳するのではなく、YouTube向けに再構成した日本語の動画タイトル(30字程度、内容を的確に表し興味を引くもの)にすること
 ・最後のシーンのnarrationは、ニュースの締めくくりに続けて、チャンネル登録を自然に促す一言(押し付けがましくならない程度)で終えること
@@ -359,6 +363,7 @@ SCRIPT_PROMPT_TEMPLATE = """あなたはニュース解説動画の脚本家で�
 
 def build_script_prompt(main_article, related_articles, web_results):
     _, main_title, main_body, _ = main_article
+    main_body = (main_body or "")[:BODY_CHARS_LIMIT]
 
     related_text = "\n".join(
         f"- {title}: {summary or ''}" for _, title, summary in related_articles
@@ -368,10 +373,25 @@ def build_script_prompt(main_article, related_articles, web_results):
         f"- {r.get('title', '')}: {r.get('content', '')[:500]}" for r in web_results
     ) or "(該当なし)"
 
+    total_material_chars = len(main_body) + len(related_text) + len(web_text)
+    if total_material_chars < THIN_MATERIAL_CHARS_THRESHOLD:
+        length_instruction = (
+            "・軸となる記事・関連材料の情報量が実際に乏しいため、"
+            "無理に水増しせず、内容に見合った少ないシーン数で構成してよい"
+        )
+    else:
+        length_instruction = (
+            f"・{TARGET_SCENES}シーン程度になるよう、背景・経緯・関係者への影響・"
+            "今後の展望など、軸記事および関連材料に基づく内容で厚みを持たせて構成すること。"
+            "シーン数を埋めるためだけの一般論(「〜にも活用できます」等の創作)は禁止だが、"
+            "材料に基づく詳細な解説・背景説明で厚みを持たせることは推奨する"
+        )
+
     return SCRIPT_PROMPT_TEMPLATE.format(
         target_scenes=TARGET_SCENES,
+        length_instruction=length_instruction,
         main_title=main_title,
-        main_body=(main_body or "")[:BODY_CHARS_LIMIT],
+        main_body=main_body,
         related_articles=related_text,
         web_results=web_text,
     )
