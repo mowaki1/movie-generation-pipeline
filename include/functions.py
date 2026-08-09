@@ -23,6 +23,13 @@ def ask(prompt, filename=None, num_predict=4096):
             "top_p": 0.9,
             "num_ctx": 32768,
             "num_predict": num_predict,
+            # Swallow(hf.co経由のGGUF)へ切り替えた際、チャットテンプレートの
+            # 終了トークンがOllamaの/api/generate(生の補完API)で正しく解釈
+            # されず、"<|im_end|>"等が可視文字として出力され、そこで生成が
+            # 早期に打ち切られる不具合が見つかった(outlineの最終シーンが
+            # 欠落する形で発覚)。明示的にstopとして指定し、混入・早期打ち切り
+            # 両方を防ぐ
+            "stop": ["<|im_end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_start|>"],
         },
     }
 

@@ -41,6 +41,9 @@ def ask(prompt, filename=None, num_predict=4096):
             "top_p": 0.9,
             "num_ctx": 32768,
             "num_predict": num_predict,
+            # Swallowのチャットテンプレート終了トークンが/api/generateで正しく
+            # 解釈されず可視文字として漏れ、生成が早期打ち切りになる不具合対策
+            "stop": ["<|im_end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_start|>"],
         },
     }
 
