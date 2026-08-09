@@ -274,7 +274,7 @@ def build_character_json(active_characters):
         indent=2
     )
 
-def parse_pipe_outline(text, start, end):
+def _extract_pipe_scenes(text, start, end):
     scenes = []
 
     # まず 51|要約 形式を読む
@@ -303,7 +303,10 @@ def parse_pipe_outline(text, start, end):
     unique = {}
     for s in scenes:
         unique[s["scene_no"]] = s
-    scenes = [unique[i] for i in sorted(unique)]
+    return [unique[i] for i in sorted(unique)]
+
+def parse_pipe_outline(text, start, end):
+    scenes = _extract_pipe_scenes(text, start, end)
 
     expected = list(range(start, end + 1))
     actual = [x["scene_no"] for x in scenes]
@@ -312,6 +315,57 @@ def parse_pipe_outline(text, start, end):
         raise ValueError(f"outline番号不一致: expected={expected}, actual={actual}")
 
     return scenes
+
+def generate_outline_with_continuation(outline_prompt, start, end, max_retries=3, num_predict=4096, filename_prefix="02_outline"):
+    # 骨子生成の最終盤で、モデルが要求件数の途中(例:4件中3件目)で
+    # 自ら応答を終えてしまい、フルリトライしても毎回同じ箇所で
+    # 打ち切られる不具合があった。ゼロからやり直す代わりに、生成できた
+    # 分はそのまま採用し、不足分だけを追加生成することで回収する
+    expected_count = end - start + 1
+    outline_text = ""
+    for attempt in range(1, max_retries + 1):
+        outline_text = ask(
+            outline_prompt,
+            filename=f"{filename_prefix}_{start:03d}_{end:03d}_raw.txt",
+            num_predict=num_predict,
+        )
+
+        candidate = _extract_pipe_scenes(outline_text, start, end)
+
+        if len(candidate) == expected_count:
+            return candidate
+
+        got = {x["scene_no"] for x in candidate}
+        missing = [n for n in range(start, end + 1) if n not in got]
+        if candidate and missing and missing[-1] - missing[0] + 1 == len(missing):
+            continued = _continue_outline(outline_prompt, candidate, missing, num_predict)
+            if continued is not None:
+                merged = sorted(candidate + continued, key=lambda x: x["scene_no"])
+                if len(merged) == expected_count:
+                    return merged
+
+        print(f"outline {start}-{end} が {len(candidate)} 件でした (試行 {attempt}/{max_retries})")
+
+    print(f"ERROR: outline {start}-{end} が{max_retries}回試行しても失敗しました")
+    print(outline_text)
+    raise SystemExit(1)
+
+def _continue_outline(outline_prompt, candidate, missing, num_predict):
+    written = "\n".join(f"{x['scene_no']}|{x['summary']}" for x in candidate)
+    continuation_prompt = f"""
+{outline_prompt}
+
+ここまで、以下のscene_noまで骨子を書きました。これらは書き直さないでください。
+{written}
+
+続きとして、scene_no {missing[0]} から {missing[-1]} までの骨子だけを追加で書いてください。
+
+出力は以下の形式のみ。
+{missing[0]}|要約
+"""
+    text = ask(continuation_prompt, num_predict=num_predict)
+    continued = _extract_pipe_scenes(text, missing[0], missing[-1])
+    return continued if len(continued) == len(missing) else None
 
 def parse_pipe_narration(text, start, end):
     scenes = []
