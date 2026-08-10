@@ -172,6 +172,22 @@ for start in range(1, VIDEO_LENGTH + 1, 5):
     with open(INCLUDE_PATH / f"narration_prompt_{args[1]}.py", "r", encoding="utf-8-sig") as f:
         exec(f.read())
 
+    # 一部ジャンル(1001〜1013, 3002)のoutline_*.pyでは、動画冒頭に
+    # TEASER_SCENES個の「コールドオープン」の骨子(断片的・示唆的な要約)を
+    # 作っているが、それをナレーション本文に膨らませるnarration_prompt側には
+    # 「これが引きである」という情報が無く、他の通常シーンと同じトーンで
+    # 詳しく説明されてしまい、骨子側の意図が埋もれていた。TEASER_SCENESは
+    # 全ジャンルで定義されているわけではないため、USE_TAVILY_SEARCHと同様に
+    # globals().get()で安全に取得する
+    TEASER_SCENES = globals().get("TEASER_SCENES", 0)
+    if TEASER_SCENES > 0 and start <= TEASER_SCENES:
+        narration_prompt += (
+            f"\n\n重要: scene_no 1〜{TEASER_SCENES}はコールドオープン"
+            "(視聴者を引き込むための冒頭)です。状況を説明しすぎず、"
+            "感情が最も動く瞬間を短く切り取り、「なぜこうなったのか」が"
+            "気になる終わり方の文にしてください。"
+        )
+
     # チャンネル登録を促す一言は動画全体で最後のシーンにのみ入れたい。
     # 以前はbase_*.py側に無条件で「最後のシーンには〜」と書いていたため、
     # 5シーンごとのチャンクそれぞれが「最後のシーン」だと誤解され、
