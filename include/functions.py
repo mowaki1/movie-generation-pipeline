@@ -413,6 +413,20 @@ def is_repetition_garbage(text):
     compressed_len = len(zlib.compress(data, level=9))
     return compressed_len < len(data) * 0.4
 
+NARRATION_TAIL_GARBAGE_RE = re.compile(
+    r"(\s+|<br\s*/?>|\|+|\d+\s*[|｜]\s*ナレーション本文)+$",
+    re.IGNORECASE,
+)
+
+def clean_narration_tail(text):
+    # 5シーンずつのチャンク単位で生成しているため、各チャンクの最後の
+    # シーンで、モデルが応答の終わりの合図のように"<br>"タグを付け足したり、
+    # プロンプトの形式指示("N|ナレーション本文"という雛形例文そのもの)を
+    # 誤って出力してしまうことがあった(実測: is_repetition_garbageで
+    # 検出できるほど長くはないが、末尾に明らかな残骸が付着するケース)。
+    # 末尾のこれらの残骸を取り除く
+    return NARRATION_TAIL_GARBAGE_RE.sub("", text).strip()
+
 def parse_pipe_narration(text, start, end):
     scenes = []
 
@@ -425,7 +439,7 @@ def parse_pipe_narration(text, start, end):
         m = re.match(r"^(\d+)\s*[|｜]\s*(.+)$", line)
         if m:
             scene_no = int(m.group(1))
-            narration = m.group(2).strip()
+            narration = clean_narration_tail(m.group(2).strip())
             if start <= scene_no <= end and not is_repetition_garbage(narration):
                 scenes.append({
                     "scene_no": scene_no,
@@ -440,7 +454,7 @@ def parse_pipe_narration(text, start, end):
             re.S
         ):
             scene_no = int(m.group(1))
-            narration = m.group(2).strip()
+            narration = clean_narration_tail(m.group(2).strip())
             if start <= scene_no <= end and not is_repetition_garbage(narration):
                 scenes.append({
                     "scene_no": scene_no,
