@@ -1,4 +1,5 @@
-﻿
+﻿import zlib
+
 GARBLED_BYTE_TOKEN_RE = re.compile(r"<0x[0-9A-Fa-f]{2}>")
 
 LEAKED_SPECIAL_TOKENS = ["<|im_end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_start|>"]
@@ -398,19 +399,19 @@ def _continue_outline(outline_prompt, candidate, missing, num_predict):
     return continued if len(continued) == len(missing) else None
 
 def is_repetition_garbage(text):
-    # モデルが同じ短いフレーズ("<br>"等)を延々と繰り返すループに陥り、
-    # num_predict上限まで埋め尽くす劣化出力が稀に発生した。先頭の短い
-    # 断片が全体の過半を占める場合、正常な文章ではなく壊れた出力とみなす
+    # モデルが同じフレーズを延々と繰り返すループに陥り、num_predict上限まで
+    # 埋め尽くす劣化出力が稀に発生した。繰り返し単位は"<br>"のような短い
+    # 断片のこともあれば、1文まるごと(100文字超)のこともあり、固定長の
+    # 断片一致では後者を検出できなかった(実測: 1文が30回以上繰り返されても
+    # 未検出)。繰り返しの多い文字列はzlib圧縮で極端に小さくなる性質を
+    # 利用し、圧縮率で判定する(正常な日本語文は概ね0.6〜0.8程度に対し、
+    # 繰り返し劣化出力は0.05前後まで縮む)
     stripped = text.strip()
     if len(stripped) < 100:
         return False
-    for chunk_len in (4, 6, 8, 10, 12):
-        if len(stripped) < chunk_len * 5:
-            continue
-        chunk = stripped[:chunk_len]
-        if chunk.strip() and stripped.count(chunk) * chunk_len > len(stripped) * 0.5:
-            return True
-    return False
+    data = stripped.encode("utf-8")
+    compressed_len = len(zlib.compress(data, level=9))
+    return compressed_len < len(data) * 0.4
 
 def parse_pipe_narration(text, start, end):
     scenes = []
