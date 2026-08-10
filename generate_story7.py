@@ -51,12 +51,35 @@ if (OUTDIR / "final_story.json").exists():
     print(f"skip (cached): {OUTDIR / 'final_story.json'}")
     raise SystemExit(0)
 
+# 関数群のpy
+with open(INCLUDE_PATH / "functions.py", "r", encoding="utf-8-sig") as f:
+    exec(f.read())
+
 # LLMの学習データが古いジャンル(variables_*.pyでUSE_TAVILY_SEARCH = Trueを
-# 指定したもの)では、テーマ名でWeb検索し最新情報をBASEに埋め込む
+# 指定したもの)では、テーマ名でWeb検索し最新情報をBASEに埋め込む。
+# MOVIE_THEMEは「第7章 バッテリーを長持ちさせる設定」のような内部的な
+# 章タイトル表記を含むため、そのまま検索クエリに使うと実際のWeb検索に
+# 適さない(章番号込みの文言は現実の検索クエリとして使われないため、
+# 有効なヒットが得にくい)。機械的に章番号を取り除くのではなく、LLMに
+# 自然な検索キーワードを考えさせてから検索する
 web_context = ""
 if globals().get("USE_TAVILY_SEARCH", False):
+    search_query = ask(
+        f"""次のテーマについて、Web検索で有益な情報を得るための、
+自然な検索キーワードを1つ考えてください。
+「第◯章」のような内部的な体裁は含めず、検索エンジンで実際に使われそうな
+簡潔なキーワードにすること。
+
+テーマ：{MOVIE_THEME}
+
+出力は検索キーワードのみ。説明文や記号は禁止。""",
+        filename="00_search_query.txt",
+        num_predict=64,
+    ).strip()
+    print(f"search query: {search_query!r}")
+
     print("searching web (Tavily)...")
-    web_results = tavily_search(MOVIE_THEME)
+    web_results = tavily_search(search_query)
     web_text = "\n".join(
         f"- {r.get('title', '')}: {r.get('content', '')[:500]}" for r in web_results
     )
@@ -66,10 +89,6 @@ if globals().get("USE_TAVILY_SEARCH", False):
 内容が矛盾する場合はこちらを優先すること):
 {web_text}
 """
-
-# 関数群のpy
-with open(INCLUDE_PATH / "functions.py", "r", encoding="utf-8-sig") as f:
-    exec(f.read())
 
 # BASEのpy
 with open(INCLUDE_PATH / f"base_{args[1]}.py", "r", encoding="utf-8-sig") as f:
