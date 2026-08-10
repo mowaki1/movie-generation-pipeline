@@ -211,13 +211,22 @@ def select_article(conn, genre_id):
         DEDUP_SELECT_MAX_ATTEMPTS = 2
         response = ""
         for _ in range(DEDUP_SELECT_MAX_ATTEMPTS):
-            response = ask_ollama(
-                SELECT_WITH_COVERED_PROMPT_TEMPLATE.format(
-                    covered_listing=covered_listing,
-                    candidate_listing=candidate_listing,
-                ),
-                num_predict=64,
-            )
+            try:
+                response = ask_ollama(
+                    SELECT_WITH_COVERED_PROMPT_TEMPLATE.format(
+                        covered_listing=covered_listing,
+                        candidate_listing=candidate_listing,
+                    ),
+                    num_predict=64,
+                )
+            except Exception as e:
+                # ask_ollama()は空レスポンス等で例外を送出することがあるが、
+                # これまでここでは捕捉しておらず、1回の異常応答でジョブ全体が
+                # 失敗していた。他の不正応答時と同様、リトライ・フォールバックに
+                # 委ねる
+                print(f"WARNING: dedup-aware selection request failed: {e}")
+                response = ""
+                continue
 
             if "NONE" in response.upper():
                 continue
@@ -234,13 +243,24 @@ def select_article(conn, genre_id):
         )
 
     listing = "\n".join(f"{aid}: {title}\n  {summary}" for aid, title, summary in candidates)
-    response = ask_ollama(SELECT_PROMPT_TEMPLATE.format(listing=listing), num_predict=64)
 
-    match = re.search(r"\d+", response)
-    if not match or int(match.group()) not in valid_ids:
-        raise RuntimeError(f"could not parse a valid article id from: {response!r}")
+    # ここが最後の砦(これ以上のフォールバック先が無い)のため、
+    # 空レスポンス等の一過性の失敗で即諦めず、数回re試行してから諦める
+    PLAIN_SELECT_MAX_ATTEMPTS = 2
+    response = ""
+    for _ in range(PLAIN_SELECT_MAX_ATTEMPTS):
+        try:
+            response = ask_ollama(SELECT_PROMPT_TEMPLATE.format(listing=listing), num_predict=64)
+        except Exception as e:
+            print(f"WARNING: plain selection request failed: {e}")
+            response = ""
+            continue
 
-    return int(match.group())
+        match = re.search(r"\d+", response)
+        if match and int(match.group()) in valid_ids:
+            return int(match.group())
+
+    raise RuntimeError(f"could not parse a valid article id from: {response!r}")
 
 
 def get_article(conn, article_id):
