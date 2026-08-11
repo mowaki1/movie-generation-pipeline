@@ -185,6 +185,21 @@ for start in range(1, VIDEO_LENGTH + 1, 5):
     with open(INCLUDE_PATH / f"narration_prompt_{args[1]}.py", "r", encoding="utf-8-sig") as f:
         exec(f.read())
 
+    # 5シーンずつ別々のLLM呼び出しでナレーションを生成しているため、各チャンクは
+    # 直前のチャンクで実際にどう書かれたか(骨子の要約ではなく本文そのもの)を
+    # 知らない。そのため、チャンクの冒頭で話が微妙にリセットされ、既に説明済み
+    # の内容を「どうやって使うんだろう？」等と改めて問い直してしまうケースが
+    # あった。直前チャンク末尾の実際のナレーション文を続きとして渡し、
+    # 話の流れを踏まえて書けるようにする
+    if narration_scenes:
+        recent_context = "\n".join(
+            f"{s['scene_no']}|{s['narration']}" for s in narration_scenes[-3:]
+        )
+        narration_prompt += (
+            "\n\n直前までの実際のナレーション(続きとして書く際の参考。"
+            f"この内容を繰り返したり、話を蒸し返したりしないこと):\n{recent_context}"
+        )
+
     # 一部ジャンル(1001〜1013, 3002)のoutline_*.pyでは、動画冒頭に
     # TEASER_SCENES個の「コールドオープン」の骨子(断片的・示唆的な要約)を
     # 作っているが、それをナレーション本文に膨らませるnarration_prompt側には
