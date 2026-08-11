@@ -35,7 +35,8 @@ Markdown禁止。
 }}
 
 条件：
-- charactersは必要な場合のみ
+- charactersには、視聴者に語りかける案内役を1人必ず含めること(現代的な服装で、appearanceに人種・民族的背景を明記する)
+- 案内役に加えて、紹介する歴史上の人物がいれば必要な場合のみcharactersに追加してよい(その場合appearanceに時代考証を入れる)
 - characterがいる場合、各characterには必ず name, role, age, appearance を入れる
 - appearance は時代考証を入れる
 - appearance はFlux向けの英語プロンプトにする
