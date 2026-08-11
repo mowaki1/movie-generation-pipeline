@@ -414,14 +414,15 @@ def is_repetition_garbage(text):
     return compressed_len < len(data) * 0.4
 
 NARRATION_TAIL_GARBAGE_RE = re.compile(
-    r"(\s+|<br\s*/?>|\|+|\d+\s*[|｜]\s*ナレーション本文)+$",
+    r"(\s+|<br\s*/?>|\|+|\d+\s*[|｜]?\s*(?:ナレーション本文)?)+$",
     re.IGNORECASE,
 )
 
 def clean_narration_tail(text):
     # 5シーンずつのチャンク単位で生成しているため、各チャンクの最後の
     # シーンで、モデルが応答の終わりの合図のように"<br>"タグを付け足したり、
-    # プロンプトの形式指示("N|ナレーション本文"という雛形例文そのもの)を
+    # プロンプトの形式指示("N|ナレーション本文"という雛形例文、あるいは
+    # そのNだけの裸の数字)を
     # 誤って出力してしまうことがあった(実測: is_repetition_garbageで
     # 検出できるほど長くはないが、末尾に明らかな残骸が付着するケース)。
     # 末尾のこれらの残骸を取り除く
