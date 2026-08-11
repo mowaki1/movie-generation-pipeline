@@ -98,6 +98,15 @@ with open(INCLUDE_PATH / f"base_{args[1]}.py", "r", encoding="utf-8-sig") as f:
 with open(INCLUDE_PATH / f"design_prompt_{args[1]}.py", "r", encoding="utf-8-sig") as f:
     exec(f.read())
 
+# design_promptはact1〜act10(ドラマ系)やchapter1〜chapter8(学びなおし系)など
+# ジャンルによって必須キーが異なるが、JSON例(省略表記のことがある)と
+# 指示文の両方に必ずキー名が列挙されているため、design_prompt全文から
+# 動的に抽出する。以前は"story_structure"というキーの存在だけを
+# チェックしており、必要なact/chapterの一部が欠けたまま(例: chapter8が
+# 無い)使われ、後段のoutline_*.pyでKeyErrorとなりジョブ全体が失敗する
+# ケースがあった
+expected_structure_keys = sorted(set(re.findall(r"(?:act|chapter)\d+", design_prompt)))
+
 # LLMがJSON構文を1箇所でも崩す(クォート抜け等)とdesign全体のパースが失敗し、
 # 後続のoutline/narrationと違ってここだけリトライが無く即座にジョブ全体が
 # 失敗していたため、他の工程と同様に数回re試行してから諦めるようにする
@@ -115,14 +124,18 @@ for attempt in range(1, DESIGN_MAX_RETRIES + 1):
     candidate_json = safe_json_loads(design_text, {})
     candidate_json["title"] = MOVIE_THEME
 
-    if "story_structure" in candidate_json:
-        design_json = candidate_json
-        break
-
-    print(f"design生成が壊れたJSONを返しました (試行 {attempt}/{DESIGN_MAX_RETRIES})")
+    structure = candidate_json.get("story_structure")
+    if isinstance(structure, dict):
+        missing_keys = [k for k in expected_structure_keys if k not in structure]
+        if not missing_keys:
+            design_json = candidate_json
+            break
+        print(f"design生成のstory_structureに{missing_keys}が欠けていました (試行 {attempt}/{DESIGN_MAX_RETRIES})")
+    else:
+        print(f"design生成が壊れたJSONを返しました (試行 {attempt}/{DESIGN_MAX_RETRIES})")
 
 if design_json is None:
-    print(f"ERROR: design生成が{DESIGN_MAX_RETRIES}回試行しても story_structure を含みませんでした")
+    print(f"ERROR: design生成が{DESIGN_MAX_RETRIES}回試行しても必要なstory_structureを含みませんでした")
     print(design_text)
     raise SystemExit(1)
 
