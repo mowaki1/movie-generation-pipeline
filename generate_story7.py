@@ -10,7 +10,7 @@ from pathlib import Path
 
 args = sys.argv
 
-MODEL = "hf.co/mradermacher/Llama-3.3-Swallow-70B-Instruct-v0.4-GGUF:Q5_K_M"
+MODEL = "gemma4:31b-it-bf16"
 API_URL = "http://localhost:11434/api/generate"
 #MOVIE_THEME = "面会ゼロだった老人に起きた大逆転"
 MOVIE_THEME = args[3]

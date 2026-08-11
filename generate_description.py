@@ -13,7 +13,7 @@ if len(args) < 2:
 
 OUTDIR = Path(f"jobs/story_pipeline{args[1]}")
 
-MODEL = "hf.co/mradermacher/Llama-3.3-Swallow-70B-Instruct-v0.4-GGUF:Q5_K_M"
+MODEL = "gemma4:31b-it-bf16"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
 # llama.cpp/Ollama側がUTF-8として正しく組み立てられなかったトークンを
