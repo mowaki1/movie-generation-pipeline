@@ -75,6 +75,11 @@ if globals().get("USE_TAVILY_SEARCH", False):
 出力は検索キーワードのみ。説明文や記号は禁止。""",
         filename="00_search_query.txt",
         num_predict=64,
+        # 検索キーワードは短い方が正解のため、長文向けの既定の品質ガード
+        # (50文字超でないと成功とみなさない)をそのまま適用すると、正しい
+        # 短いキーワードが繰り返し「失敗」判定され、リトライの末に劣化した
+        # (空文字含む)応答を返してしまっていた
+        min_length=1,
     ).strip()
     print(f"search query: {search_query!r}")
 

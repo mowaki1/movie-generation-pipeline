@@ -37,7 +37,7 @@ def strip_leaked_special_tokens(text):
     return text[:earliest] if earliest is not None else text
 
 
-def ask(prompt, filename=None, num_predict=4096):
+def ask(prompt, filename=None, num_predict=4096, min_length=50):
     # 注意: "format": "json" (文法制約付きデコーディング)はgemma4:31b-it-bf16で
     # 出力が"own own own..."のように壊れる不具合があるため使用しない。
     # プロンプト側の指示とrepair_json_array/safe_json_loadsのフェンス除去で代替する。
@@ -69,7 +69,7 @@ def ask(prompt, filename=None, num_predict=4096):
         text = res.json().get("response", "").strip()
         text = strip_leaked_special_tokens(text).strip()
 
-        if len(text) > 50 and not has_garbled_byte_tokens(text):
+        if len(text) > min_length and not has_garbled_byte_tokens(text):
             if filename:
                 (OUTDIR / filename).write_text(text, encoding="utf-8")
             return text
