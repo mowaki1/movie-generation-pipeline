@@ -78,17 +78,27 @@ if globals().get("USE_TAVILY_SEARCH", False):
     ).strip()
     print(f"search query: {search_query!r}")
 
-    print("searching web (Tavily)...")
-    web_results = tavily_search(search_query)
-    web_text = "\n".join(
-        f"- {r.get('title', '')}: {r.get('content', '')[:500]}" for r in web_results
-    )
-    if web_text:
-        web_context = f"""
+    # LLMが検索キーワード生成に失敗して空文字を返すことがあり、それをそのまま
+    # Tavilyに渡すと400エラーになりジョブ全体が失敗していた。Web検索はあくまで
+    # 補助情報であり、失敗してもLLMの学習データだけで生成を続行できるため、
+    # ジョブ全体を落とさずWeb検索無しで続行する
+    if not search_query:
+        print("WARNING: 検索キーワードの生成に失敗しました(空文字)。Web検索をスキップします。")
+    else:
+        try:
+            print("searching web (Tavily)...")
+            web_results = tavily_search(search_query)
+            web_text = "\n".join(
+                f"- {r.get('title', '')}: {r.get('content', '')[:500]}" for r in web_results
+            )
+            if web_text:
+                web_context = f"""
 参考情報(Web検索結果。LLMの学習データより新しい情報の可能性があるため、
 内容が矛盾する場合はこちらを優先すること):
 {web_text}
 """
+        except Exception as e:
+            print(f"WARNING: Web検索に失敗しました({e})。Web検索結果無しで続行します。")
 
 # BASEのpy
 with open(INCLUDE_PATH / f"base_{args[1]}.py", "r", encoding="utf-8-sig") as f:
