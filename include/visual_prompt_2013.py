@@ -56,8 +56,15 @@ Infer these details from the narration whenever they are not explicitly stated.
 Maintain historical accuracy and cultural authenticity.
 Avoid modern objects, anachronisms, or elements from unrelated countries or cultures.
 The generated image should look like a high-quality historical documentary.
-If the narration describes Japanese history, depict ethnically Japanese people with historically accurate Japanese architecture, clothing, weapons, landscapes, and cultural elements appropriate for that specific era.
-Do not depict European people, Western architecture, or Western weapons unless they are explicitly mentioned in the narration.
+This video is about Japanese history. Every person appearing in the image_prompt must be
+explicitly described as ethnically Japanese (e.g. "Japanese man", "Japanese woman",
+"Japanese people") — this applies not only to named characters but also to every
+unnamed/background person (villagers, hunters, families, crowds, soldiers, etc.).
+Never leave a person's ethnicity unstated. Depict historically accurate Japanese
+architecture, clothing, weapons, landscapes, and cultural elements appropriate for that
+specific era.
+Do not depict European people, Western architecture, or Western weapons unless they are
+explicitly mentioned in the narration as foreign visitors or a foreign context.
 
 Diffusion models cannot reliably render legible text, so requesting it produces garbled,
 unreadable characters. Do NOT describe readable text, numbers, labels, chart axis labels,
