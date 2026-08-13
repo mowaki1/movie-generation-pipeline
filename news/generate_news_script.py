@@ -530,8 +530,38 @@ def main():
     for _, title, _ in related_articles:
         print(f"  related: {title}")
 
+    # 記事タイトルをそのままTavilyに渡すと、検索結果の上位に選定元の記事
+    # そのものが出てきてしまい、実質的に新しい情報が追加されない。LLMに
+    # 記事の周辺情報(背景・影響・関連トピック)が見つかりやすい検索キーワード
+    # を考えさせることで、同じ記事の再取得ではなく補足情報を得やすくする
+    print("generating search query...")
+    try:
+        search_query = ask_ollama(
+            f"""次のニュース記事について、その背景・影響・関連情報をWeb検索で
+得るための、自然な検索キーワードを1つ考えてください。
+記事のタイトルをそのまま使うと同じ記事しか見つからないため、
+記事の内容を補足する周辺情報が見つかりやすいキーワードにすること。
+
+タイトル：{main_article[1]}
+要約：{main_article[3] or ''}
+
+出力は検索キーワードのみ。説明文や記号は禁止。""",
+            num_predict=64,
+        ).strip()
+    except Exception as e:
+        print(f"WARNING: 検索キーワード生成に失敗しました({e})。記事タイトルで代用します。")
+        search_query = main_article[1]
+
+    if not search_query:
+        search_query = main_article[1]
+    print(f"search query: {search_query!r}")
+
     print("searching web (Tavily)...")
-    web_results = tavily_search(main_article[1])
+    try:
+        web_results = tavily_search(search_query)
+    except Exception as e:
+        print(f"WARNING: Web検索に失敗しました({e})。Web検索結果無しで続行します。")
+        web_results = []
     for r in web_results:
         print(f"  web: {r.get('title', '')}")
 
