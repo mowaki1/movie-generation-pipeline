@@ -119,6 +119,21 @@ for act_index in range(10):
 {ACT_DESCRIPTIONS[act_index]}
 """
 
+    # Actごとに別々のLLM呼び出しでoutlineを生成しているため、後のActは前の
+    # Actで実際にどんな骨子が書かれたか(design_jsonの抽象的な構成ではなく、
+    # 具体的に設定された危機・課題そのもの)を知らない。そのため、序盤で
+    # 大きく張った伏線(経済的損失、身体的な衰え等)が終盤で一切回収されずに
+    # 放置される不具合があった。ここまでに実際に生成された骨子を渡し、
+    # 伏線を意識して書けるようにする
+    prior_outline_context = ""
+    if outline:
+        prior_lines = "\n".join(f"{x['scene_no']}|{x['summary']}" for x in outline)
+        prior_outline_context = f"""
+これまでに実際に作られたシーン骨子(続きとして書く際の参考。ここで設定された
+危機・課題・障害は、放置せず、この後の段階のどこかで必ず結末をつけること):
+{prior_lines}
+"""
+
     outline_prompt = f"""
 {BASE}
 
@@ -129,6 +144,7 @@ for act_index in range(10):
 今回使う展開：
 {act_text}
 {extra_rule}
+{prior_outline_context}
 
 出力は以下の形式のみ。
 JSON禁止。
