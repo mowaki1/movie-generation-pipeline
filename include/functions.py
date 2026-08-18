@@ -428,7 +428,9 @@ def clean_narration_tail(text):
     # 末尾のこれらの残骸を取り除く
     return NARRATION_TAIL_GARBAGE_RE.sub("", text).strip()
 
-def parse_pipe_narration(text, start, end):
+MIN_NARRATION_LENGTH = 20
+
+def _extract_pipe_narration_scenes(text, start, end):
     scenes = []
 
     # 1|ナレーション 形式
@@ -441,7 +443,16 @@ def parse_pipe_narration(text, start, end):
         if m:
             scene_no = int(m.group(1))
             narration = clean_narration_tail(m.group(2).strip())
-            if start <= scene_no <= end and not is_repetition_garbage(narration):
+            # scene_noラベルが出た直後にnum_predict上限で生成が打ち切られると、
+            # "55|如月蓮は"のような数文字の断片だけが残ることがある。これは
+            # scene_no自体は存在するため、番号一致だけを見る完全性チェックを
+            # すり抜けてしまっていた(実測)。最低文字数を満たさないものは
+            # 「まだ生成できていない」扱いにし、missing側に回して再生成させる
+            if (
+                start <= scene_no <= end
+                and len(narration) >= MIN_NARRATION_LENGTH
+                and not is_repetition_garbage(narration)
+            ):
                 scenes.append({
                     "scene_no": scene_no,
                     "narration": narration
@@ -456,17 +467,25 @@ def parse_pipe_narration(text, start, end):
         ):
             scene_no = int(m.group(1))
             narration = clean_narration_tail(m.group(2).strip())
-            if start <= scene_no <= end and not is_repetition_garbage(narration):
+            if (
+                start <= scene_no <= end
+                and len(narration) >= MIN_NARRATION_LENGTH
+                and not is_repetition_garbage(narration)
+            ):
                 scenes.append({
                     "scene_no": scene_no,
                     "narration": narration
                 })
 
+    # 重複除去
     unique = {}
     for s in scenes:
         unique[s["scene_no"]] = s
+    return [unique[i] for i in sorted(unique)]
 
-    scenes = [unique[i] for i in sorted(unique)]
+
+def parse_pipe_narration(text, start, end):
+    scenes = _extract_pipe_narration_scenes(text, start, end)
 
     expected = list(range(start, end + 1))
     actual = [x["scene_no"] for x in scenes]
@@ -475,3 +494,58 @@ def parse_pipe_narration(text, start, end):
         raise ValueError(f"narration番号不一致: expected={expected}, actual={actual}")
 
     return scenes
+
+
+def _continue_narration(narration_prompt, candidate, missing, num_predict):
+    written = "\n".join(f"{x['scene_no']}|{x['narration']}" for x in candidate)
+    continuation_prompt = f"""
+{narration_prompt}
+
+ここまで、以下のscene_noまでナレーションを書きました。これらは書き直さないでください。
+{written}
+
+続きとして、scene_no {missing[0]} から {missing[-1]} までのナレーションだけを追加で書いてください。
+
+出力は以下の形式のみ。
+{missing[0]}|ナレーション本文
+"""
+    text = ask(continuation_prompt, num_predict=num_predict)
+    continued = _extract_pipe_narration_scenes(text, missing[0], missing[-1])
+    return continued if len(continued) == len(missing) else None
+
+
+def generate_narration_with_continuation(narration_prompt, start, end, max_retries=3, num_predict=4096, filename_prefix="03_narration"):
+    # outline生成(generate_outline_with_continuation)と同じ考え方。
+    # LLMが要求件数の途中、特に最後のシーンのscene_noラベルを出した直後に
+    # num_predict上限に達して打ち切られることがあり、以前はscene_noさえ
+    # 揃っていれば内容の長さを見ていなかったため、数文字だけの断片が
+    # そのまま採用されてしまっていた。生成できた分はそのまま採用し、
+    # 不足分(=欠落または極端に短いscene_no)だけを追加生成して回収する
+    expected_count = end - start + 1
+    narration_text = ""
+    for attempt in range(1, max_retries + 1):
+        narration_text = ask(
+            narration_prompt,
+            filename=f"{filename_prefix}_{start:03d}_{end:03d}_raw.json",
+            num_predict=num_predict,
+        )
+
+        candidate = _extract_pipe_narration_scenes(narration_text, start, end)
+
+        if len(candidate) == expected_count:
+            return candidate
+
+        got = {x["scene_no"] for x in candidate}
+        missing = [n for n in range(start, end + 1) if n not in got]
+        if candidate and missing and missing[-1] - missing[0] + 1 == len(missing):
+            continued = _continue_narration(narration_prompt, candidate, missing, num_predict)
+            if continued is not None:
+                merged = sorted(candidate + continued, key=lambda x: x["scene_no"])
+                if len(merged) == expected_count:
+                    return merged
+
+        print(f"narration {start}-{end} が {len(candidate)} 件でした (試行 {attempt}/{max_retries})")
+
+    print(f"ERROR: narration {start}-{end} が{max_retries}回試行しても失敗しました")
+    print(narration_text)
+    raise SystemExit(1)

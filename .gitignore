@@ -31,4 +31,5 @@
 !/docs/**
 /news/__pycache__/
 /news/batch.log
+/include/__pycache__/
 !/.gitignore

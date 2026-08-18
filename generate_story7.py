@@ -244,26 +244,14 @@ for start in range(1, VIDEO_LENGTH + 1, 5):
         )
 
     # LLMが一部のシーン番号を生成せず打ち切ることがある(構文的には正常だが
-    # 内容が不完全)。ask()側のリトライ(壊れたバイト列/短すぎる応答)とは
-    # 別の失敗パターンなので、ここでも数回re試行してから諦める
-    NARRATION_MAX_RETRIES = 3
-    part = None
-    for attempt in range(1, NARRATION_MAX_RETRIES + 1):
-        text = ask(
-            narration_prompt,
-            filename=f"03_narration_{start:03d}_{end:03d}_raw.json",
-            num_predict=4096,
-        )
-        try:
-            part = parse_pipe_narration(text, start, end)
-            break
-        except Exception as e:
-            print(f"narration parse failed {start}-{end} (試行 {attempt}/{NARRATION_MAX_RETRIES}): {e}")
-            print(text)
-
-    if part is None:
-        print(f"ERROR: narration {start}-{end} が{NARRATION_MAX_RETRIES}回試行しても失敗しました")
-        raise SystemExit(1)
+    # 内容が不完全)ことに加え、最後のシーンのscene_noラベルを出した直後に
+    # num_predict上限で打ち切られ、数文字だけの断片が「scene_noは存在する」
+    # という理由でそのまま採用されてしまう不具合があった(実測)。outline生成
+    # と同じcontinuation方式で、不足分(欠落または極端に短いscene_no)だけを
+    # 追加生成して回収する
+    part = generate_narration_with_continuation(
+        narration_prompt, start, end, max_retries=3, num_predict=4096
+    )
 
     for item in part:
         if "scene_no" in item and "narration" in item:
