@@ -34,6 +34,8 @@ Markdown禁止。
 条件：
 - characters には主要人物を3〜5人入れる
 - 各characterには必ず name, role, age, appearance を入れる
+- name はVOICEVOX(音声合成)が正しく読み上げられるよう、一般的で読み間違えられにくい
+  氏名にすること。難読漢字やいわゆるキラキラネーム(独特な当て字・特殊な読み方)は避ける
 - appearance はFlux向けの英語プロンプトにする
 - appearance には年齢、性別、髪型、服装、表情、雰囲気を入れる
 - まだ本文やシーン本文は書かない

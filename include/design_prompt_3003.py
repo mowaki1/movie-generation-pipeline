@@ -37,6 +37,8 @@ Markdown禁止。
 条件：
 - charactersには、視聴者に語りかける案内役の講師を1人必ず含める
 - characterには必ず name, role, age, appearance を入れる
+- name はVOICEVOX(音声合成)が正しく読み上げられるよう、一般的で読み間違えられにくい
+  氏名にすること。難読漢字やいわゆるキラキラネーム(独特な当て字・特殊な読み方)は避ける
 - appearance はFlux向けの英語プロンプトにする
 - appearance には年齢、性別、髪型、服装、表情、雰囲気を入れる
 - appearance には人種を必ず明記すること(現代の日本人講師として描写するため、基本的に"Japanese"を明記する。空欄や省略は禁止)
