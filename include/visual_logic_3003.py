@@ -55,12 +55,17 @@ for c in active_characters:
 for c in active_characters:
     motion_prompt = motion_prompt.replace(c["name"], f'{c["name"]} ({c["appearance"]})')
 
-prefix = MODERN_PREFIX
+# CLIPテキストエンコーダーは77トークンまでしか読めず、それを超えた部分は
+# 切り捨てられる(T5側は512トークンまで読めるが、FLUXはCLIPとT5の出力を
+# 連結して使うため、CLIP側が見る内容も画像の構図に影響する)。人物の外見
+# 描写を先頭に置くと、複数人物がいるシーンではそれだけで77トークンを超え、
+# 肝心のシーン内容(場面・行動)がCLIP側から見て存在しないのと同じ扱いに
+# なってしまう。シーン内容を先に、外見描写を後ろに回すことで、CLIPの
+# 77トークン以内に実際の場面描写が収まりやすくする
+image_prompt = MODERN_PREFIX + ", " + image_prompt
 
 if appearance_prefix:
-    prefix += ", " + ", ".join(appearance_prefix)
-
-image_prompt = prefix + ", " + image_prompt
+    image_prompt += ", " + ", ".join(appearance_prefix)
 
 final_scenes.append({
     "scene_no": scene_no,
