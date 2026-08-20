@@ -151,17 +151,18 @@ def main():
     auto_upload_announced = False
 
     while True:
-        # 1000/3000番台 x1
-        genre_id = DRAMA_TRIVIA_GENRES[drama_idx % len(DRAMA_TRIVIA_GENRES)]
-        drama_idx += 1
-        run_drama_or_study(conn, genre_id)
+        # 1000/3000番台 x2
+        for _ in range(2):
+            genre_id = DRAMA_TRIVIA_GENRES[drama_idx % len(DRAMA_TRIVIA_GENRES)]
+            drama_idx += 1
+            run_drama_or_study(conn, genre_id)
         # ITニュース、金融ニュース(各一回)
         for genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
             run_news(conn, genre_id)
         rest()
 
-        # 2000番台 x2
-        for _ in range(2):
+        # 2000番台 x3
+        for _ in range(3):
             genre_id = STUDY_GENRES[study_idx % len(STUDY_GENRES)]
             study_idx += 1
             run_drama_or_study(conn, genre_id)
