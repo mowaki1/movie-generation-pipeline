@@ -21,6 +21,31 @@ sys.stderr.reconfigure(line_buffering=True)
 
 DB_DSN = "dbname=video_pipeline"
 
+
+class DB:
+    """1本の動画生成に何時間もかかる間、接続を張りっぱなしにするため、
+    サーバー再起動やネットワーク瞬断で接続が切れても自動的に張り直す。"""
+
+    def __init__(self, dsn):
+        self.dsn = dsn
+        self.conn = psycopg2.connect(dsn)
+
+    def _reconnect(self):
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+        self.conn = psycopg2.connect(self.dsn)
+
+    def run(self, fn):
+        try:
+            return fn(self.conn)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            print(f"DB connection lost ({e}), reconnecting...")
+            self._reconnect()
+            return fn(self.conn)
+
+
 # 1000番台(ドラマ)+3000番台(雑学・ミステリー)
 DRAMA_TRIVIA_GENRES = [
     1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013,
@@ -91,22 +116,23 @@ def run_script(script, script_args):
     return subprocess.run([sys.executable, str(SCRIPT_DIR / script), *script_args])
 
 
-def run_drama_or_study(conn, genre_id):
-    row = get_next_title(conn, genre_id)
+def run_drama_or_study(db, genre_id):
+    row = db.run(lambda conn: get_next_title(conn, genre_id))
     if row is None:
         print(f"  no pending titles left for genre_id={genre_id}, skipping")
         return
 
     row_id, title = row
-    mark_status(conn, row_id, 1)
+    db.run(lambda conn: mark_status(conn, row_id, 1))
     print(f"=== genre_id={genre_id} pipeline_no={row_id} title={title!r} ===")
 
     result = run_script("run_pipeline.py", [str(genre_id), str(row_id), title])
-    mark_status(conn, row_id, 3 if result.returncode == 0 else 2)
+    status_id = 3 if result.returncode == 0 else 2
+    db.run(lambda conn: mark_status(conn, row_id, status_id))
 
 
-def run_news(conn, genre_id):
-    row_id = insert_news_placeholder(conn, genre_id)
+def run_news(db, genre_id):
+    row_id = db.run(lambda conn: insert_news_placeholder(conn, genre_id))
     print(f"=== news genre_id={genre_id} pipeline_no={row_id} ===")
 
     result = run_script("run_news_pipeline.py", [str(genre_id), str(row_id)])
@@ -117,10 +143,10 @@ def run_news(conn, genre_id):
             with open(final_story_path, encoding="utf-8") as f:
                 title = json.load(f).get("title", "")
             if title:
-                update_news_title(conn, row_id, title)
-        mark_status(conn, row_id, 3)
+                db.run(lambda conn: update_news_title(conn, row_id, title))
+        db.run(lambda conn: mark_status(conn, row_id, 3))
     else:
-        mark_status(conn, row_id, 2)
+        db.run(lambda conn: mark_status(conn, row_id, 2))
 
 
 def get_completed_counts(conn):
@@ -131,8 +157,8 @@ def get_completed_counts(conn):
         return dict(cur.fetchall())
 
 
-def all_genres_reviewed_twice(conn):
-    counts = get_completed_counts(conn)
+def all_genres_reviewed_twice(db):
+    counts = db.run(get_completed_counts)
     return all(counts.get(g, 0) >= AUTO_UPLOAD_REVIEW_THRESHOLD for g in ALL_GENRES)
 
 
@@ -143,7 +169,7 @@ def rest():
 
 
 def main():
-    conn = psycopg2.connect(DB_DSN)
+    db = DB(DB_DSN)
 
     drama_idx = 0
     study_idx = 0
@@ -155,35 +181,35 @@ def main():
         for _ in range(2):
             genre_id = DRAMA_TRIVIA_GENRES[drama_idx % len(DRAMA_TRIVIA_GENRES)]
             drama_idx += 1
-            run_drama_or_study(conn, genre_id)
+            run_drama_or_study(db, genre_id)
         # ITニュース、金融ニュース(各一回)
         for genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
-            run_news(conn, genre_id)
+            run_news(db, genre_id)
         rest()
 
         # 2000番台 x3
         for _ in range(3):
             genre_id = STUDY_GENRES[study_idx % len(STUDY_GENRES)]
             study_idx += 1
-            run_drama_or_study(conn, genre_id)
+            run_drama_or_study(db, genre_id)
         # ITニュース、金融ニュース(各一回)
         for genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
-            run_news(conn, genre_id)
+            run_news(db, genre_id)
         rest()
 
         # ITの教室・お金の教室 x2
         for _ in range(2):
             genre_id = PRACTICAL_GENRES[practical_idx % len(PRACTICAL_GENRES)]
             practical_idx += 1
-            run_drama_or_study(conn, genre_id)
+            run_drama_or_study(db, genre_id)
         rest()
 
         # 10000番台 全て(全て一回ずつ)
         for genre_id in NEWS_GENRES:
-            run_news(conn, genre_id)
+            run_news(db, genre_id)
         rest()
 
-        if not auto_upload_announced and all_genres_reviewed_twice(conn):
+        if not auto_upload_announced and all_genres_reviewed_twice(db):
             auto_upload_announced = True
             print("=== 全ジャンルで手動アップロードが2周完了しました。自動アップロードへの移行タイミングです ===")
 
