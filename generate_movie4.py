@@ -23,6 +23,9 @@ for scene in story["scenes"]:
     SCENES.append(scene["scene_no"])
     MOTION_PROMPTS[scene["scene_no"]] = scene["motion_prompt"]
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+OUTRO_PATH = SCRIPT_DIR / "assets" / "outro.mp4"
+
 UV_BIN = str(Path.home() / ".local/bin/uv")
 LTX_DIR = Path("/home/mowaki/roujin_home_senka/LTX-2")
 LTX_CKPT = Path("/data/models/ltx/ltx-2.3/ltx-2.3-22b-distilled-1.1.safetensors")
@@ -235,7 +238,9 @@ def concat_videos(scene_videos: list[Path]) -> Path:
 
 def main() -> None:
     scene_videos = [make_scene_video(n) for n in SCENES]
-    episode = concat_videos(scene_videos)
+    if not OUTRO_PATH.exists():
+        raise FileNotFoundError(OUTRO_PATH)
+    episode = concat_videos(scene_videos + [OUTRO_PATH])
     print(f"done: {episode}")
 
 if __name__ == "__main__":

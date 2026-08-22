@@ -4,6 +4,7 @@
 !/generate_images2.py
 !/generate_voices3.py
 !/generate_movie4.py
+!/generate_outro_asset.py
 !/generate_description.py
 !/generate_thumbnail.py
 !/send_completion_email.py
