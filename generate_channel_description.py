@@ -16,6 +16,22 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 # 漢字生成時)。生成結果自体の破損なので検出したら失敗させる
 GARBLED_BYTE_TOKEN_RE = re.compile(r"<0x[0-9A-Fa-f]{2}>")
 
+
+def repair_garbled_byte_tokens(text):
+    # 特定の漢字が毎回同じ壊れ方をするケースがあり、リトライしても同じ話題
+    # では毎回同じ理由で失敗し続けることがあった。<0xXX>の連続は元々1文字分の
+    # UTF-8バイト列がそのまま漏れたものなので、16進数としてデコードし直せば
+    # 元の文字を復元できる
+    def decode_run(match):
+        hex_bytes = re.findall(r"<0x([0-9A-Fa-f]{2})>", match.group(0))
+        raw = bytes(int(h, 16) for h in hex_bytes)
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return match.group(0)
+
+    return re.sub(r"(?:<0x[0-9A-Fa-f]{2}>)+", decode_run, text)
+
 FAMILY_LABELS = {
     "drama": "人間ドラマ",
     "study": "大人の学びなおし",
@@ -86,6 +102,8 @@ def ask_ollama(prompt, num_predict=800):
             f"empty response, done_reason={data.get('done_reason')!r}, "
             f"eval_count={data.get('eval_count')}"
         )
+    if GARBLED_BYTE_TOKEN_RE.search(text):
+        text = repair_garbled_byte_tokens(text)
     if GARBLED_BYTE_TOKEN_RE.search(text):
         raise RuntimeError(f"LLM output contains garbled byte tokens: {text!r}")
     return text

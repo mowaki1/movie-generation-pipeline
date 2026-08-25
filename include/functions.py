@@ -17,6 +17,22 @@ def has_garbled_byte_tokens(text):
     return bool(GARBLED_BYTE_TOKEN_RE.search(text))
 
 
+def repair_garbled_byte_tokens(text):
+    # 特定の漢字が毎回同じ壊れ方をするケースがあり、リトライしても同じ話題
+    # (特定の単語を使いたがる文脈)では毎回同じ理由で失敗し続けることがあった。
+    # <0xXX>の連続は元々1文字分のUTF-8バイト列がそのまま漏れたものなので、
+    # 16進数としてデコードし直せば元の文字を復元できる
+    def decode_run(match):
+        hex_bytes = re.findall(r"<0x([0-9A-Fa-f]{2})>", match.group(0))
+        raw = bytes(int(h, 16) for h in hex_bytes)
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return match.group(0)
+
+    return re.sub(r"(?:<0x[0-9A-Fa-f]{2}>)+", decode_run, text)
+
+
 def strip_leaked_special_tokens(text):
     # optionsのstopで指定していても、Ollamaがstop文字列を完全には
     # response から除去しきれず、地の文と同じ行に混入することがある
@@ -68,6 +84,9 @@ def ask(prompt, filename=None, num_predict=4096, min_length=50):
         res.raise_for_status()
         text = res.json().get("response", "").strip()
         text = strip_leaked_special_tokens(text).strip()
+
+        if has_garbled_byte_tokens(text):
+            text = repair_garbled_byte_tokens(text)
 
         if len(text) > min_length and not has_garbled_byte_tokens(text):
             if filename:
