@@ -72,6 +72,11 @@ graph data labels, or on-screen UI text in the image_prompt. If the narration me
 chart, graph, whiteboard, document, sign, book, or screen, describe it as a blurred, abstract,
 or out-of-focus visual element without legible text or data labels.
 
+Keep image_prompt concise: describe the scene and action in one or two
+sentences (roughly 40-60 words). Character appearance details will be
+appended automatically afterward, so do not pad the scene description
+itself with extra descriptive clauses.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English

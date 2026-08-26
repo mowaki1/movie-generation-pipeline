@@ -70,6 +70,11 @@ text such as full menus, multiple UI labels, sentences, or paragraphs of on-scre
 describe those parts of the screen, chart, whiteboard, or document as blurred, abstract,
 or out-of-focus instead.
 
+Keep image_prompt concise: describe the scene and action in one or two
+sentences (roughly 40-60 words). Character appearance details will be
+appended automatically afterward, so do not pad the scene description
+itself with extra descriptive clauses.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English

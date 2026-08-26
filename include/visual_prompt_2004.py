@@ -61,6 +61,11 @@ Depict people with ethnic backgrounds accurate to the country/region being discu
 Diffusion models cannot reliably render legible text, especially long or complex text.
 However, short well-known literal terms (roughly 4-6 characters, e.g. institution names, headlines) have a much higher chance of rendering correctly than free-form sentences or multi-item lists. If the narration mentions a specific short name, you may include that exact literal word as a label in the image_prompt (e.g., a newspaper headline, a signboard). Do NOT invent or write out longer text such as full articles, multiple labels, sentences, or paragraphs of on-screen text; describe those parts of the screen, document, or chart as blurred, abstract, or out-of-focus instead.
 
+Keep image_prompt concise: describe the scene and action in one or two
+sentences (roughly 40-60 words). Character appearance details will be
+appended automatically afterward, so do not pad the scene description
+itself with extra descriptive clauses.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English

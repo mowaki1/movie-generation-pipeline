@@ -44,7 +44,7 @@ for c in active_characters:
     )
 
 for c in active_characters:
-    motion_prompt = motion_prompt.replace(c["name"], f'{c["name"]} ({c["appearance"]})')
+    motion_prompt = motion_prompt.replace(c["name"], f'{c["name"]} ({c["appearance"]})', 1)
 
 if appearance_prefix:
     # CLIPテキストエンコーダーは77トークンまでしか読めず、それを超えた

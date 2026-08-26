@@ -53,7 +53,7 @@ for c in active_characters:
     )
 
 for c in active_characters:
-    motion_prompt = motion_prompt.replace(c["name"], f'{c["name"]} ({c["appearance"]})')
+    motion_prompt = motion_prompt.replace(c["name"], f'{c["name"]} ({c["appearance"]})', 1)
 
 # CLIPテキストエンコーダーは77トークンまでしか読めず、それを超えた部分は
 # 切り捨てられる(T5側は512トークンまで読めるが、FLUXはCLIPとT5の出力を

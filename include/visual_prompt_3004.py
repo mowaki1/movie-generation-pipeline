@@ -70,6 +70,11 @@ axis labels, multiple data labels, sentences, or on-screen UI text; describe tho
 of the chart, graph, whiteboard, document, or screen as blurred, abstract, or out-of-focus
 instead.
 
+Keep image_prompt concise: describe the scene and action in one or two
+sentences (roughly 40-60 words). Character appearance details will be
+appended automatically afterward, so do not pad the scene description
+itself with extra descriptive clauses.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English
