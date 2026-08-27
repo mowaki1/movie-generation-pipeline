@@ -1,6 +1,14 @@
+# フォールバック(JSON解析失敗時)は人物・地域の手がかりが一切無いと、
+# FLUXが無関係な人種(西洋人等)を描いてしまう不具合があった。案内役以外に
+# 登録された人物(歴史上の人物や作品の登場人物)がいれば、そのappearanceから
+# 時代・地域の手がかりを借用する(このジャンルは話ごとに舞台の国・時代が
+# 変わるため、フォールバックに固定の人種を決め打ちできない)
+_fallback_characters = design_json.get("characters", [])
+_fallback_context = f", {_fallback_characters[-1]['appearance']}" if len(_fallback_characters) > 1 else ""
+
 fallback = {
     "scene_no": scene_no,
-    "image_prompt": "sports history documentary,cinematic,photorealistic",
+    "image_prompt": f"sports history documentary,cinematic,photorealistic{_fallback_context}",
     "motion_prompt": "slow cinematic camera"
 }
 
