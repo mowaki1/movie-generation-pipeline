@@ -143,6 +143,23 @@ def split_subtitles(text, max_chars=24):
 
     return result
     
+# VOICEVOXは「方」を文脈判断できず「ホウ」と読んでしまうことが多いが、
+# 実際のナレーションでは「この方/その方」のような指示語、または「興味のある方は」
+# のような動詞・形容詞の連体形に続く「方」は、ほぼ必ず人を指す「カタ」読みになる
+# (特に「興味のある方はチャンネル登録を」というCTAで頻出し、機械読み上げ感が
+# 強く出て逆効果になっていた)。一方「〜した方がいい/よい」という比較表現は
+# 正しく「ホウ」と読む必要があるため、後ろに「が」が続く場合は対象外にする。
+# 字幕表示には影響させたくないため、音声合成に渡すテキストだけ「かた」に
+# 置き換える
+KATA_READING_LOOKAHEAD = r'(?=[はもにへを、。！？]|$)'
+
+def fix_kata_reading(text: str) -> str:
+    text = text.replace("方々", "かたがた")
+    text = re.sub(rf'(この|その|あの|どの)方{KATA_READING_LOOKAHEAD}', r'\1かた', text)
+    text = re.sub(rf'(ない|[るたい])方{KATA_READING_LOOKAHEAD}', r'\1かた', text)
+    return text
+
+
 def create_audio_query(text: str, speaker: int) -> dict:
     params = {
         "text": text,
@@ -180,7 +197,7 @@ def main() -> None:
             if out.exists():
                 print(f"skip (cached): {out}")
             else:
-                query = create_audio_query(subtitle, SPEAKER_ID)
+                query = create_audio_query(fix_kata_reading(subtitle), SPEAKER_ID)
 
                 # 必要ならここで話速などを調整
                 query["speedScale"] = 0.95
