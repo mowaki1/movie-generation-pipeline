@@ -61,6 +61,12 @@ sentences (roughly 40-60 words). Character appearance details will be
 appended automatically afterward, so do not pad the scene description
 itself with extra descriptive clauses.
 
+The image must be photorealistic, like a live-action Japanese TV drama or
+film. Do NOT render it as anime, manga, cartoon, illustration, CG-rendered,
+or any other stylized/animated art style, even if the scene involves
+children, school uniforms, or other subjects commonly associated with
+anime art in the model's training data.
+
 Output rules:
 - image_prompt: English
 - motion_prompt: English
