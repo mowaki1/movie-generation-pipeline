@@ -187,7 +187,14 @@ character_names = "\n".join(
 )
 
 for start in range(1, VIDEO_LENGTH + 1, 5):
-    end = start + 4
+    # VIDEO_LENGTHが5の倍数でない場合、最終チャンクのendがVIDEO_LENGTHを
+    # 超えてしまい(例: VIDEO_LENGTH=52でstart=51だとend=55)、narration_prompt
+    # 側は「scene_no 55まで出力せよ」と指示する一方、chunk_outlineには
+    # 51・52しか実在しないため、LLMが骨子に無いシーンを捏造して内容が
+    # 空疎になり、最終的にnum_predict上限で文が途中で切れる不具合があった
+    # (実測: 3002でVIDEO_LENGTH=52なのに55シーン目まで生成され、53〜55が
+    # 実質的な蛇足のうえ文末が欠落していた)
+    end = min(start + 4, VIDEO_LENGTH)
     chunk_outline = [
         x for x in outline
         if start <= int(x["scene_no"]) <= end
