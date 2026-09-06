@@ -26,6 +26,11 @@ with open(BASEDIR / "final_story.json", encoding="utf-8") as f:
 
 SPEAKER_ID = story.get("speaker_id", DEFAULT_SPEAKER_ID)
 
+# 1000番台(ドラマ系)は0.95倍だと間延びして感じられるため、1.5倍の方が
+# しっくりくるとのフィードバックにより、ジャンル系統ごとに速度を変える
+GENRE_ID = story.get("genre_id", 0)
+SPEED_SCALE = 1.5 if 1000 <= GENRE_ID < 2000 else 0.95
+
 narrations = []
 for scene in story["scenes"]:
     narrations.append(scene["narration"])
@@ -200,7 +205,7 @@ def main() -> None:
                 query = create_audio_query(fix_kata_reading(subtitle), SPEAKER_ID)
 
                 # 必要ならここで話速などを調整
-                query["speedScale"] = 0.95
+                query["speedScale"] = SPEED_SCALE
                 query["intonationScale"] = 1.0
                 query["volumeScale"] = 1.0
                 query["prePhonemeLength"] = 0.2
