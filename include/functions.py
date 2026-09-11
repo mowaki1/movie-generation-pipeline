@@ -171,6 +171,18 @@ def extract_first_json_object(text):
                     return text[start:i + 1]
     raise ValueError("complete JSON object not found")
 
+# LLMが文字列値の先頭のクォートだけを書き忘れ、末尾のクォートは書いている
+# 壊れ方が稀に起きる(例: "chapter5": 【環境と農業】〜する。",)。1箇所でも
+# 起きるとjson.loads全体が失敗し、design生成等がリトライ上限まで無駄になる
+# (実例: genre_id=2003 pipeline_no=1609が3回ともこのパターンで失敗)ため、
+# 該当パターンを検出して先頭にクォートを補ってから再パースを試みる
+MISSING_OPEN_QUOTE_RE = re.compile(
+    r'("[A-Za-z0-9_]+"\s*:\s*)([^"\{\[\s][^\n]*?)("\s*(?=[,\}\]]))'
+)
+
+def repair_missing_opening_quote(text):
+    return MISSING_OPEN_QUOTE_RE.sub(lambda m: f"{m.group(1)}\"{m.group(2)}{m.group(3)}", text)
+
 def safe_json_loads(text, fallback):
     cleaned = strip_code_fence(text)
     try:
@@ -180,6 +192,10 @@ def safe_json_loads(text, fallback):
     try:
         return json.loads(extract_first_json_object(cleaned))
     except (json.JSONDecodeError, ValueError):
+        pass
+    try:
+        return json.loads(repair_missing_opening_quote(cleaned))
+    except json.JSONDecodeError:
         return fallback
 
 def build_character_bible(design_json):
