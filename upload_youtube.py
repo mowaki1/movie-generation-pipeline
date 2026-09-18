@@ -2,9 +2,9 @@
 # authorize_youtube.py(Windows側)で作成し、~/roujin_home_senka/credentials/ に
 # 転送済みの token_<genre_id>.json を使って認証する。
 #
-# 公開設定は必ず「限定公開」でアップロードする。事実誤認等のリスクがある
-# ニュース系動画をいきなり無人で一般公開しないための安全策(2026-08-04合意)。
-# 最終確認後、手動で「公開」に切り替える運用とする。
+# 公開設定は「公開」でアップロードする。以前は事実誤認等のリスクがある
+# ニュース系動画を無人でいきなり一般公開しないため「限定公開」+手動確認と
+# していた(2026-08-04合意)が、2026-09-18に全ジャンル即時公開へ方針変更。
 
 import json
 import sys
@@ -16,7 +16,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+# 再生リスト作成・追加にはyoutube.uploadでは権限不足(403)になるため、より広い
+# youtubeスコープを使う(2026-09-18、ITニュース統合対応)。token_10002.jsonは
+# このスコープで再認証済みであること
+SCOPES = ["https://www.googleapis.com/auth/youtube"]
 CREDENTIALS_DIR = Path.home() / "roujin_home_senka" / "credentials"
 YOUTUBE_TITLE_MAX_CHARS = 100  # YouTube側の上限
 
@@ -24,6 +27,22 @@ DEFAULT_CATEGORY_ID = "25"  # News & Politics(ニュース系10001〜10009向け
 CATEGORY_ID_BY_GENRE = {
     "3003": "27",  # ITの教室 → Education
     "3004": "27",  # 資産運用系 → Education
+}
+
+# 9チャンネルに分散すると個々の登録者数・総再生時間(収益化条件)の伸びが遅く
+# なるため、ITニュース(10002)にジャンルを統合する(地政学=10005のみ従来通り
+# 独立維持、2026-09-18合意)。記事分類・脚本生成は従来通りジャンルごとに行い、
+# アップロード先のチャンネルと再生リスト分けだけをここで統合する
+MERGED_INTO_GENRE_ID = "10002"
+MERGE_SOURCE_GENRE_IDS = {"10001", "10003", "10004", "10006", "10007", "10008", "10009"}
+PLAYLIST_TITLE_BY_GENRE = {
+    "10001": "AIニュース",
+    "10003": "GPUニュース",
+    "10004": "金融ニュース",
+    "10006": "科学ニュース",
+    "10007": "医療ニュース",
+    "10008": "Linuxニュース",
+    "10009": "セキュリティニュース",
 }
 
 args = sys.argv
@@ -35,7 +54,8 @@ genre_id = args[1]
 pipeline_no = args[2]
 
 OUTDIR = Path(f"jobs/story_pipeline{pipeline_no}")
-token_path = CREDENTIALS_DIR / f"token_{genre_id}.json"
+upload_token_genre_id = MERGED_INTO_GENRE_ID if genre_id in MERGE_SOURCE_GENRE_IDS else genre_id
+token_path = CREDENTIALS_DIR / f"token_{upload_token_genre_id}.json"
 
 video_id_path = OUTDIR / "youtube_video_id.txt"
 if video_id_path.exists():
@@ -85,7 +105,7 @@ body = {
         "defaultAudioLanguage": "ja",
     },
     "status": {
-        "privacyStatus": "unlisted",
+        "privacyStatus": "public",
         "selfDeclaredMadeForKids": False,
         # 実在の出来事を写実的なAI生成画像で描いているため、YouTubeの
         # 「AIで改変・合成されたリアルなコンテンツ」開示対象に該当する
@@ -104,7 +124,7 @@ while response is None:
         print(f"upload progress: {int(status.progress() * 100)}%")
 
 video_id = response["id"]
-print(f"uploaded (limited public/限定公開): https://www.youtube.com/watch?v={video_id}")
+print(f"uploaded (public/公開): https://www.youtube.com/watch?v={video_id}")
 
 thumbnail_path = OUTDIR / "thumbnail.png"
 if thumbnail_path.exists():
@@ -119,6 +139,45 @@ if thumbnail_path.exists():
         print("thumbnail set")
     except HttpError as e:
         print(f"WARNING: thumbnail set failed (video upload itself succeeded): {e}")
+
+playlist_title = PLAYLIST_TITLE_BY_GENRE.get(genre_id)
+if playlist_title:
+    try:
+        playlist_id = None
+        request = youtube.playlists().list(part="snippet", mine=True, maxResults=50)
+        while request is not None and playlist_id is None:
+            response = request.execute()
+            for item in response.get("items", []):
+                if item["snippet"]["title"] == playlist_title:
+                    playlist_id = item["id"]
+                    break
+            request = youtube.playlists().list_next(request, response)
+
+        if playlist_id is None:
+            created = youtube.playlists().insert(
+                part="snippet,status",
+                body={
+                    "snippet": {"title": playlist_title},
+                    "status": {"privacyStatus": "unlisted"},
+                },
+            ).execute()
+            playlist_id = created["id"]
+            print(f"created playlist: {playlist_title} ({playlist_id})")
+
+        youtube.playlistItems().insert(
+            part="snippet",
+            body={
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {"kind": "youtube#video", "videoId": video_id},
+                }
+            },
+        ).execute()
+        print(f"added to playlist: {playlist_title}")
+    except HttpError as e:
+        # 動画本体のアップロードは既に成功しているので、再生リスト追加の
+        # 失敗(権限不足等)でジョブ全体を失敗させない
+        print(f"WARNING: playlist add failed (video upload itself succeeded): {e}")
 
 (OUTDIR / "youtube_video_id.txt").write_text(video_id, encoding="utf-8")
 print(f"done: {OUTDIR / 'youtube_video_id.txt'}")

@@ -22,7 +22,9 @@ from pathlib import Path
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+# 再生リスト作成・追加(ITニュースへのジャンル統合、2026-09-18)にはyoutube.uploadでは
+# 権限不足(403)になるため、より広いyoutubeスコープを使う
+SCOPES = ["https://www.googleapis.com/auth/youtube"]
 
 args = sys.argv
 if len(args) < 3:
