@@ -16,10 +16,13 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
-# 再生リスト作成・追加にはyoutube.uploadでは権限不足(403)になるため、より広い
-# youtubeスコープを使う(2026-09-18、ITニュース統合対応)。token_10002.jsonは
-# このスコープで再認証済みであること
-SCOPES = ["https://www.googleapis.com/auth/youtube"]
+# 再生リスト作成・追加にはyoutube.uploadでは権限不足(403)になるため、
+# ITニュース(10002)統合分だけより広いyoutubeスコープを使う(2026-09-18)。
+# token_10002.jsonのみこのスコープで再認証済み。他のジャンルのトークンは
+# 従来通りyoutube.uploadスコープのままなので、全ジャンル一律で広いスコープを
+# 要求するとリフレッシュ時にinvalid_scopeエラーになる(実際に3003で発生した)
+SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+PLAYLIST_SCOPES = ["https://www.googleapis.com/auth/youtube"]
 CREDENTIALS_DIR = Path.home() / "roujin_home_senka" / "credentials"
 YOUTUBE_TITLE_MAX_CHARS = 100  # YouTube側の上限
 
@@ -70,7 +73,8 @@ if not token_path.exists():
     print(f"ERROR: {token_path} がありません。先にauthorize_youtube.py(Windows側)で認証してください。")
     raise SystemExit(1)
 
-credentials = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+scopes = PLAYLIST_SCOPES if upload_token_genre_id == MERGED_INTO_GENRE_ID else SCOPES
+credentials = Credentials.from_authorized_user_file(str(token_path), scopes)
 
 # アクセストークンが期限切れなら、リフレッシュトークンで更新して保存し直す
 if credentials.expired and credentials.refresh_token:
