@@ -53,6 +53,33 @@ CHANNEL_DESCRIPTION_PROMPT = """以下のYouTubeチャンネルの「チャン�
 """
 
 
+ENGLISH_CHANNEL_DESCRIPTION_PROMPT = """Write the "About" description for the following YouTube channel in English.
+
+Channel name: {genre_name}
+Coverage: {scope}
+
+Requirements:
+- 500 to 800 characters in total
+- Explain clearly what viewers will find on the channel and why it is worth following
+- State honestly, in a single sentence, that the videos are produced with AI (AI-generated scripts, narration and visuals)
+- Include one short call to action to subscribe
+- Plain text only: no preface, headings, markdown or quotation marks
+"""
+
+# 英語版チャンネル(ジャンル名がASCIIのみ)ごとの扱う範囲の説明
+ENGLISH_SCOPES = {
+    10010: (
+        "daily news on science and technology: AI, IT, GPUs and semiconductors, "
+        "cybersecurity, Linux and open source, scientific research, medicine, "
+        "and technology-related business and finance"
+    ),
+    10011: (
+        "geopolitics: international relations, diplomacy, security, trade "
+        "and the shifting global balance of power"
+    ),
+}
+
+
 def get_family(genre_id):
     if 1000 <= genre_id < 2000:
         return "drama"
@@ -130,9 +157,14 @@ def main():
     conn.close()
 
     print(f"generating channel description for {genre_name}...")
-    description = ask_ollama(
-        CHANNEL_DESCRIPTION_PROMPT.format(genre_name=genre_name, family_label=family_label)
-    )
+    if genre_name.isascii():
+        prompt = ENGLISH_CHANNEL_DESCRIPTION_PROMPT.format(
+            genre_name=genre_name,
+            scope=ENGLISH_SCOPES.get(genre_id, "news and analysis"),
+        )
+    else:
+        prompt = CHANNEL_DESCRIPTION_PROMPT.format(genre_name=genre_name, family_label=family_label)
+    description = ask_ollama(prompt)
 
     # 後続工程(画像/動画生成のFLUX等)がVRAMを使えるよう、終了時にOllamaのモデルをアンロードする
     subprocess.run(["ollama", "stop", MODEL], check=False)

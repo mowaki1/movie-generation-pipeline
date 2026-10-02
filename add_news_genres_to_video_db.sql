@@ -7,5 +7,7 @@ INSERT INTO m_genres (id, genre) VALUES
     (10006, '科学ニュース'),
     (10007, '医療ニュース'),
     (10008, 'Linuxニュース'),
-    (10009, 'セキュリティニュース')
+    (10009, 'セキュリティニュース'),
+    (10010, 'Science and Technology News'),
+    (10011, 'Geopolitical News')
 ON CONFLICT (id) DO NOTHING;

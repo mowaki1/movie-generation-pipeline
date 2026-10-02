@@ -24,7 +24,17 @@ def romanize(text):
     return slug.lower()
 
 
+# 英語版チャンネルは、ジャンル名をそのままローマ字化すると長すぎる(ハンドルは
+# 30文字まで)ため、短い候補を個別に用意する。実際の空き状況はYouTube側で確認が必要
+ENGLISH_HANDLE_CANDIDATES = {
+    10010: ["@sciencetechnews", "@sciencetechnologynews", "@scitechnewsdaily", "@sciencetechnews10010"],
+    10011: ["@geopoliticalnews", "@geopoliticsnews", "@geopoliticalnewsdaily", "@geopoliticalnews10011"],
+}
+
+
 def build_candidates(genre_name, genre_id):
+    if genre_id in ENGLISH_HANDLE_CANDIDATES:
+        return ENGLISH_HANDLE_CANDIDATES[genre_id]
     base = romanize(genre_name)
     return [
         f"@{base}",

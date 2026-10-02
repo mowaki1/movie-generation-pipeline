@@ -22,6 +22,7 @@ FAMILY_COLORS = {
 }
 
 TAGLINE = "AI自動生成チャンネル"
+TAGLINE_EN = "AI-generated channel"
 
 
 FAMILY_ID_RANGES = {
@@ -132,7 +133,7 @@ def fit_font_size(text, font_path, max_width, max_size, min_size=40):
     return ImageFont.truetype(font_path, min_size)
 
 
-def make_banner(genre_name, bg_color, accent_color, font_path, out_path):
+def make_banner(genre_name, bg_color, accent_color, font_path, out_path, tagline=TAGLINE):
     img = Image.new("RGB", BANNER_SIZE, bg_color)
     draw = ImageDraw.Draw(img)
 
@@ -144,7 +145,7 @@ def make_banner(genre_name, bg_color, accent_color, font_path, out_path):
     tagline_font = ImageFont.truetype(font_path, 40)
 
     draw_centered_text(draw, genre_name, title_font, cx, cy - 90, accent_color)
-    draw_centered_text(draw, TAGLINE, tagline_font, cx, cy + 60, accent_color)
+    draw_centered_text(draw, tagline, tagline_font, cx, cy + 60, accent_color)
 
     img.save(out_path)
 
@@ -172,7 +173,9 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
 
     make_icon(icon_label, bg_color, accent_color, font_path, outdir / "icon.png")
-    make_banner(genre_name, bg_color, accent_color, font_path, outdir / "banner.png")
+    # 英語版チャンネル(ジャンル名がASCIIのみ)は、キャッチコピーも英語にする
+    tagline = TAGLINE_EN if genre_name.isascii() else TAGLINE
+    make_banner(genre_name, bg_color, accent_color, font_path, outdir / "banner.png", tagline)
     make_watermark(icon_label, accent_color, font_path, outdir / "watermark.png")
 
     print(f"done: {outdir / 'icon.png'}, {outdir / 'banner.png'}, {outdir / 'watermark.png'}")
