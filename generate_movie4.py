@@ -24,7 +24,10 @@ for scene in story["scenes"]:
     MOTION_PROMPTS[scene["scene_no"]] = scene["motion_prompt"]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-OUTRO_PATH = SCRIPT_DIR / "assets" / "outro.mp4"
+# 英語版ジョブでは日本語のアウトロ(日本語音声)を流せないため、final_story.jsonの
+# outro_fileで差し替え、またはnullでアウトロ無しにできる。未指定なら従来通り
+OUTRO_FILE = story.get("outro_file", "outro.mp4")
+OUTRO_PATH = SCRIPT_DIR / "assets" / OUTRO_FILE if OUTRO_FILE else None
 
 UV_BIN = str(Path.home() / ".local/bin/uv")
 LTX_DIR = Path("/home/mowaki/roujin_home_senka/LTX-2")
@@ -238,9 +241,11 @@ def concat_videos(scene_videos: list[Path]) -> Path:
 
 def main() -> None:
     scene_videos = [make_scene_video(n) for n in SCENES]
-    if not OUTRO_PATH.exists():
-        raise FileNotFoundError(OUTRO_PATH)
-    episode = concat_videos(scene_videos + [OUTRO_PATH])
+    if OUTRO_PATH is not None:
+        if not OUTRO_PATH.exists():
+            raise FileNotFoundError(OUTRO_PATH)
+        scene_videos.append(OUTRO_PATH)
+    episode = concat_videos(scene_videos)
     print(f"done: {episode}")
 
 if __name__ == "__main__":
