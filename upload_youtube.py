@@ -31,6 +31,9 @@ DEFAULT_CATEGORY_ID = "25"  # News & Politics(ニュース系10001〜10009向け
 CATEGORY_ID_BY_GENRE = {
     "3003": "27",  # ITの教室 → Education
     "3004": "27",  # 資産運用系 → Education
+    "3001": "27",  # 雑学 → Education
+    # 学びなおし系 → Education
+    **{str(g): "27" for g in (2001, 2002, 2003, 2004, 2005, 2011, 2012, 2013, 2014, 2015, 2016)},
 }
 
 # 9チャンネルに分散すると個々の登録者数・総再生時間(収益化条件)の伸びが遅く
