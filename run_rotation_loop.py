@@ -71,6 +71,10 @@ ENGLISH_GENRE_BY_SOURCE = {
     10005: 10011,
 }
 
+# 英語版を作らないと判定したとき(日本国内限定のニュース)にrun_news_pipeline_en.pyが
+# 返す終了コード(同ファイルのSKIP_EXIT_CODEと一致させること)
+ENGLISH_SKIP_EXIT_CODE = 10
+
 ALL_GENRES = STUDY_GENRES + NEWS_GENRES + PRACTICAL_GENRES
 
 # この本数だけ各ジャンルで成功(status_id=3)すれば、そのジャンルは
@@ -110,6 +114,12 @@ def insert_news_placeholder(conn, genre_id):
         row_id = cur.fetchone()[0]
     conn.commit()
     return row_id
+
+
+def delete_news_placeholder(conn, row_id):
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM t_movie_titles WHERE id = %s", (row_id,))
+    conn.commit()
 
 
 def update_news_title(conn, row_id, title):
@@ -172,7 +182,11 @@ def run_news_english(db, source_genre_id, source_row_id):
         "run_news_pipeline_en.py", [str(en_genre_id), str(en_row_id), str(source_row_id)]
     )
 
-    if result.returncode == 0:
+    if result.returncode == ENGLISH_SKIP_EXIT_CODE:
+        # 国内限定のニュースで英語版を作らなかった。失敗扱いにせず、確保した行を削除する
+        db.run(lambda conn: delete_news_placeholder(conn, en_row_id))
+        print(f"  english version skipped: source pipeline_no={source_row_id}")
+    elif result.returncode == 0:
         final_story_path = Path(f"jobs/story_pipeline{en_row_id}/final_story.json")
         if final_story_path.exists():
             with open(final_story_path, encoding="utf-8") as f:

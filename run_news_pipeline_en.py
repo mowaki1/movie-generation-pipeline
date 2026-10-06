@@ -22,12 +22,17 @@ if len(args) not in (2, 4):
 SCRIPT_DIR = Path(__file__).resolve().parent
 CREDENTIALS_DIR = Path.home() / "roujin_home_senka" / "credentials"
 
+# 日本国内限定のニュースは英語版を作らない(news/check_global_relevance_en.pyが
+# この終了コードで知らせる。run_rotation_loop.pyのENGLISH_SKIP_EXIT_CODEと一致させること)
+SKIP_EXIT_CODE = 10
+
 db = None
 if len(args) == 2:
     from run_rotation_loop import (
         DB,
         DB_DSN,
         ENGLISH_GENRE_BY_SOURCE,
+        delete_news_placeholder,
         insert_news_placeholder,
         mark_status,
         update_news_title,
@@ -54,6 +59,7 @@ else:
     source_pipeline_no = args[3]
 
 STEPS = [
+    ["news/check_global_relevance_en.py", source_pipeline_no, en_pipeline_no],
     ["news/translate_news_en.py", source_pipeline_no, en_pipeline_no, en_genre_id],
     ["generate_voices_en.py", en_pipeline_no],
     ["generate_movie4.py", en_pipeline_no],
@@ -77,6 +83,9 @@ def run_steps() -> int:
         print(f"=== {script} {' '.join(script_args)} ===")
 
         result = subprocess.run(cmd)
+        if result.returncode == SKIP_EXIT_CODE:
+            print("skip: 日本国内限定のニュースのため、英語版は作りません")
+            return SKIP_EXIT_CODE
         if result.returncode != 0:
             print(f"ERROR: {script} failed (exit code {result.returncode})")
             print("再実行すると、完了済みの工程・シーンはスキップされて続きから進みます。")
@@ -90,6 +99,10 @@ def main() -> None:
 
     # 自動採番(DB記録あり)で起動した場合のみ、ここでステータスとタイトルを更新する
     if db is not None:
+        if code == SKIP_EXIT_CODE:
+            # 作らなかった英語版の行は、番号だけが残らないよう削除する
+            db.run(lambda conn: delete_news_placeholder(conn, int(en_pipeline_no)))
+            return
         if code == 0:
             final_story_path = Path(f"jobs/story_pipeline{en_pipeline_no}/final_story.json")
             title = json.loads(final_story_path.read_text(encoding="utf-8")).get("title", "")
