@@ -67,6 +67,32 @@ SYNOPSIS_PROMPT_TEMPLATE = """以下は動画のタイトルとナレーショ�
 """
 
 
+SYNOPSIS_PROMPT_TEMPLATE_EN = """Below are a video title and its full narration.
+Create the YouTube description and tag information for this video as JSON.
+
+Requirements:
+- synopsis: an engaging summary that makes people want to watch (about 100-200 words of English). No preface or headings, body text only
+- hashtags: 5 relevant English hashtags, each starting with "#", as a single string separated by spaces
+- tags: 10-15 English search keywords for the YouTube tags field, as an array.
+  Prefer concrete names, technical terms, companies and products that actually appear in the narration,
+  rather than generic words that fit any video
+
+Output nothing except the JSON.
+
+Output format:
+{{
+  "synopsis": "...",
+  "hashtags": "#... #... #... #... #...",
+  "tags": ["...", "..."]
+}}
+
+Title: {title}
+
+Full narration:
+{narration_full}
+"""
+
+
 def strip_code_fence(text):
     text = text.strip()
     text = re.sub(r"^```(?:json)?", "", text).strip()
@@ -151,9 +177,12 @@ def main():
     title = story.get("title", "")
     narration_full = "\n".join(scene["narration"] for scene in story["scenes"])
 
+    # 英語版ジョブ(translate_news_en.pyが作る)はlanguage=enで、英語のプロンプトを使う
+    template = SYNOPSIS_PROMPT_TEMPLATE_EN if story.get("language") == "en" else SYNOPSIS_PROMPT_TEMPLATE
+
     print("generating synopsis/hashtags/tags...")
     response = ask_ollama(
-        SYNOPSIS_PROMPT_TEMPLATE.format(
+        template.format(
             title=title,
             narration_full=narration_full[:NARRATION_CHARS_LIMIT],
         ),

@@ -86,6 +86,44 @@ YouTubeサムネイルに載せる、短く強いキャッチコピーと、サ�
 """
 
 
+CATCHPHRASE_PROMPT_TEMPLATE_EN = """Below are a video title and a short synopsis.
+Create a short, punchy catchphrase for the YouTube thumbnail and an image generation prompt for the thumbnail, as JSON.
+
+Title: {title}
+Synopsis: {synopsis}
+
+Requirements:
+- catchphrase: English, 3 to 6 words (at most about 30 characters), a short phrase that grabs attention
+- image_prompt: English, a close-up, emotionally striking composition
+- In image_prompt, keep one half of the frame fairly empty so text can be placed there (e.g. place the subject off to one side)
+- Photorealistic (photograph-like) depiction
+
+Output format (output nothing except the JSON):
+{{
+  "catchphrase": "...",
+  "image_prompt": "..."
+}}
+"""
+
+FONT_NAME_EN = "DejaVu Sans:bold"
+
+
+def wrap_words(text, font, max_width):
+    # 英語は単語単位で折り返す
+    lines = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and font.getbbox(candidate)[2] > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
 def resolve_font_path(font_name=FONT_NAME):
     result = subprocess.run(
         ["fc-match", "-f", "%{file}", font_name],
@@ -115,7 +153,7 @@ def wrap_catchphrase(text, font, max_width):
     return [text[:split_at], text[split_at:]]
 
 
-def draw_catchphrase(image, text, font_path):
+def draw_catchphrase(image, text, font_path, language="ja"):
     img = image.convert("RGB").resize((THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
     draw = ImageDraw.Draw(img)
 
@@ -123,8 +161,16 @@ def draw_catchphrase(image, text, font_path):
     font = ImageFont.truetype(font_path, font_size)
     max_width = THUMBNAIL_WIDTH - 80
 
-    lines = wrap_catchphrase(text, font, max_width)
-    line_height = font.getbbox("あ")[3] + 20
+    if language == "en":
+        lines = wrap_words(text, font, max_width)
+        while len(lines) > 2 and font_size > 60:
+            font_size -= 8
+            font = ImageFont.truetype(font_path, font_size)
+            lines = wrap_words(text, font, max_width)
+        line_height = font.getbbox("Ag")[3] + 20
+    else:
+        lines = wrap_catchphrase(text, font, max_width)
+        line_height = font.getbbox("あ")[3] + 20
     total_height = line_height * len(lines)
     y = THUMBNAIL_HEIGHT - total_height - 50
 
@@ -183,14 +229,19 @@ def main():
         if character_bible_text:
             character_section = f"登場人物:\n{character_bible_text}\n"
 
+    # 英語版ジョブ(translate_news_en.pyが作る)はlanguage=enで、英語のキャッチコピーを使う
+    language = story.get("language", "ja")
+
     print("generating catchphrase and thumbnail prompt...")
-    response = ask_ollama(
-        CATCHPHRASE_PROMPT_TEMPLATE.format(
+    if language == "en":
+        prompt = CATCHPHRASE_PROMPT_TEMPLATE_EN.format(title=title, synopsis=synopsis[:1000])
+    else:
+        prompt = CATCHPHRASE_PROMPT_TEMPLATE.format(
             title=title,
             synopsis=synopsis[:1000],
             character_section=character_section,
         )
-    )
+    response = ask_ollama(prompt)
     data = json.loads(strip_code_fence(response))
     catchphrase = data["catchphrase"]
     image_prompt = data["image_prompt"]
@@ -202,8 +253,8 @@ def main():
     print("generating thumbnail image...")
     image = generate_thumbnail_image(image_prompt)
 
-    font_path = resolve_font_path()
-    final_image = draw_catchphrase(image, catchphrase, font_path)
+    font_path = resolve_font_path(FONT_NAME_EN if language == "en" else FONT_NAME)
+    final_image = draw_catchphrase(image, catchphrase, font_path, language)
 
     final_image.save(out_path)
     print(f"done: {out_path}")

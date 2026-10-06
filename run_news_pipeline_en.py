@@ -19,11 +19,24 @@ source_pipeline_no = args[3]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+CREDENTIALS_DIR = Path.home() / "roujin_home_senka" / "credentials"
+
 STEPS = [
     ["news/translate_news_en.py", source_pipeline_no, en_pipeline_no, en_genre_id],
     ["generate_voices_en.py", en_pipeline_no],
     ["generate_movie4.py", en_pipeline_no],
+    ["generate_description.py", en_pipeline_no],
+    ["generate_thumbnail.py", en_pipeline_no],
 ]
+
+# 英語版チャンネルのOAuth認証(authorize_youtube.py)が済んでtokenが置かれるまでは、
+# 動画の生成だけ行ってアップロードは見送る(限定公開で自動アップロードされる)
+if (CREDENTIALS_DIR / f"token_{en_genre_id}.json").exists():
+    STEPS.append(["upload_youtube.py", en_genre_id, en_pipeline_no])
+else:
+    print(f"note: token_{en_genre_id}.json が無いためYouTube自動アップロードは行いません")
+
+STEPS.append(["send_completion_email.py", en_pipeline_no])
 
 
 def main() -> None:

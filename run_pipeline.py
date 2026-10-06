@@ -27,8 +27,17 @@ STEPS = [
     ["generate_thumbnail.py", pipeline_no],
 ]
 
+CREDENTIALS_DIR = Path.home() / "roujin_home_senka" / "credentials"
+
 if variant_id in YOUTUBE_UPLOAD_ENABLED_VARIANTS:
+    # 認証済みのはずのジャンルでtokenが無い場合は、見逃さないようエラーにする
     STEPS.append(["upload_youtube.py", variant_id, pipeline_no])
+elif (CREDENTIALS_DIR / f"token_{variant_id}.json").exists():
+    # それ以外のジャンルは、チャンネル作成・OAuth認証(authorize_youtube.py)が
+    # 済んでtokenが置かれた時点から、限定公開で自動アップロードされる
+    STEPS.append(["upload_youtube.py", variant_id, pipeline_no])
+else:
+    print(f"note: token_{variant_id}.json が無いためYouTube自動アップロードは行いません")
 
 STEPS.append(["send_completion_email.py", pipeline_no])
 

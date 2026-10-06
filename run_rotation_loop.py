@@ -46,12 +46,10 @@ class DB:
             return fn(self.conn)
 
 
-# 1000番台(ドラマ)+3000番台(雑学・ミステリー)
-# インプレッション不振のため1012,1014,3001,3002以外は打ち切り(2026-09-10)
-DRAMA_TRIVIA_GENRES = [
-    1012, 1014,
-    3001, 3002,
-]
+# ドラマ系(1012,1014)と未解決事件簿(3002)は、ドラマ系の戦略再設計までローテーション
+# から外している(2026-10-06)。再開するときはmain()のブロックに戻すこと。
+# setup_all_channels.pyがチャンネルアセット生成の対象として参照するため定義は残す
+DRAMA_TRIVIA_GENRES = [1012, 1014, 3002]
 # 2006〜2010はinclude/variables_*.py・base_*.pyが未作成のため一時除外
 # (作成でき次第、このリストに戻すこと)
 STUDY_GENRES = [
@@ -59,17 +57,25 @@ STUDY_GENRES = [
 ]
 NEWS_GENRES = [10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009]
 
-# ITの教室・お金の教室(実用系、学びなおし系と同じく2倍頻度で回す)
-PRACTICAL_GENRES = [3003, 3004]
+# 雑学(3001)・ITの教室・お金の教室(3003,3004)。ドラマ系に代わる枠として2倍頻度で回す
+PRACTICAL_GENRES = [3001, 3003, 3004]
 
-ALL_GENRES = DRAMA_TRIVIA_GENRES + STUDY_GENRES + NEWS_GENRES + PRACTICAL_GENRES
+# 最初のブロックで先に回すニュース(AI・IT・GPU・金融・Linux)。残りは後のブロックで全て回る
+NEWS_GENRES_FIRST_BLOCK = [10001, 10002, 10003, 10004, 10008]
+
+# 日本語ニュースジョブの完成後に続けて作る英語版のジャンルID。
+# 10005(地政学)だけ専用チャンネル(10011)、他はScience and Technology News(10010)に
+# 集約され、元のジャンルごとの再生リストに入る(upload_youtube.py参照)
+ENGLISH_GENRE_BY_SOURCE = {
+    **{g: 10010 for g in (10001, 10002, 10003, 10004, 10006, 10007, 10008, 10009)},
+    10005: 10011,
+}
+
+ALL_GENRES = STUDY_GENRES + NEWS_GENRES + PRACTICAL_GENRES
 
 # この本数だけ各ジャンルで成功(status_id=3)すれば、そのジャンルは
 # 手動アップロードでの目視確認が一巡したとみなす
 AUTO_UPLOAD_REVIEW_THRESHOLD = 2
-
-# ITニュース・金融ニュースは反応が良いため、他ジャンルの2倍の頻度で回す
-DOUBLE_FREQUENCY_NEWS_GENRES = [10002, 10004]
 
 REST_SECONDS = 1 * 3600
 
@@ -146,8 +152,36 @@ def run_news(db, genre_id):
             if title:
                 db.run(lambda conn: update_news_title(conn, row_id, title))
         db.run(lambda conn: mark_status(conn, row_id, 3))
+        run_news_english(db, genre_id, row_id)
     else:
         db.run(lambda conn: mark_status(conn, row_id, 2))
+
+
+def run_news_english(db, source_genre_id, source_row_id):
+    en_genre_id = ENGLISH_GENRE_BY_SOURCE.get(source_genre_id)
+    if en_genre_id is None:
+        return
+
+    en_row_id = db.run(lambda conn: insert_news_placeholder(conn, en_genre_id))
+    print(
+        f"=== english genre_id={en_genre_id} pipeline_no={en_row_id} "
+        f"(source genre_id={source_genre_id} pipeline_no={source_row_id}) ==="
+    )
+
+    result = run_script(
+        "run_news_pipeline_en.py", [str(en_genre_id), str(en_row_id), str(source_row_id)]
+    )
+
+    if result.returncode == 0:
+        final_story_path = Path(f"jobs/story_pipeline{en_row_id}/final_story.json")
+        if final_story_path.exists():
+            with open(final_story_path, encoding="utf-8") as f:
+                title = json.load(f).get("title", "")
+            if title:
+                db.run(lambda conn: update_news_title(conn, en_row_id, title))
+        db.run(lambda conn: mark_status(conn, en_row_id, 3))
+    else:
+        db.run(lambda conn: mark_status(conn, en_row_id, 2))
 
 
 def get_completed_counts(conn):
@@ -172,42 +206,29 @@ def rest():
 def main():
     db = DB(DB_DSN)
 
-    drama_idx = 0
     study_idx = 0
     practical_idx = 0
     auto_upload_announced = False
 
     while True:
-        # 1000/3000番台 x2
-        for _ in range(2):
-            genre_id = DRAMA_TRIVIA_GENRES[drama_idx % len(DRAMA_TRIVIA_GENRES)]
-            drama_idx += 1
-            run_drama_or_study(db, genre_id)
-        # ITニュース、金融ニュース(各一回)
-        for genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
+        # AI・IT・GPU・金融・Linuxニュース(各一回、英語版を含む)
+        for genre_id in NEWS_GENRES_FIRST_BLOCK:
             run_news(db, genre_id)
-        rest()
-
         # 2000番台 x3
         for _ in range(3):
             genre_id = STUDY_GENRES[study_idx % len(STUDY_GENRES)]
             study_idx += 1
             run_drama_or_study(db, genre_id)
-        # ITニュース、金融ニュース(各一回)
-        for genre_id in DOUBLE_FREQUENCY_NEWS_GENRES:
-            run_news(db, genre_id)
         rest()
 
-        # ITの教室・お金の教室 x2
+        # 10000番台 全て(各一回、英語版を含む)
+        for genre_id in NEWS_GENRES:
+            run_news(db, genre_id)
+        # 雑学・ITの教室・お金の教室(3001/3003/3004) x2
         for _ in range(2):
             genre_id = PRACTICAL_GENRES[practical_idx % len(PRACTICAL_GENRES)]
             practical_idx += 1
             run_drama_or_study(db, genre_id)
-        rest()
-
-        # 10000番台 全て(全て一回ずつ)
-        for genre_id in NEWS_GENRES:
-            run_news(db, genre_id)
         rest()
 
         if not auto_upload_announced and all_genres_reviewed_twice(db):
