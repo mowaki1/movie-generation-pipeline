@@ -29,6 +29,10 @@ Translate the following Japanese news video narration into natural, fluent spoke
 Rules:
 - Keep every fact, number, name and nuance. Do not add or omit information.
 - Write for the ear: clear, concise sentences in a neutral news-anchor tone. Roughly the same length as the original or slightly shorter.
+- Do not translate word for word. Rephrase so that it sounds like a native English-speaking news anchor talking. Avoid vague or literal phrasing that only makes sense in Japanese.
+- The audience is a global English-speaking audience, not a Japanese one. Do not frame the news from a Japanese-market perspective: no emotional commentary such as "unfortunately" or "we look forward to" about Japan. State facts about Japan neutrally (e.g. "Japan is not part of the initial launch").
+- If the source gives a price in its original currency (e.g. US dollars) together with a yen conversion, keep only the original currency. Keep yen only when the amount is natively in yen (e.g. a Japanese company's revenue).
+- If the narration ends with a call to subscribe, write a short, natural call to subscribe to the channel.
 - Use the standard English spelling for company, product and person names (romanize Japanese names).
 - Convert Japanese-style dates and units to natural English (e.g. 2026年9月11日 -> September 11, 2026; 5億円 -> 500 million yen).
 - The output must contain no Japanese characters at all.
