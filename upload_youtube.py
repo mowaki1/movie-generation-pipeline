@@ -17,13 +17,11 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
-# 再生リスト作成・追加にはyoutube.uploadでは権限不足(403)になるため、
-# ITニュース(10002)統合分だけより広いyoutubeスコープを使う(2026-09-18)。
-# token_10002.jsonのみこのスコープで再認証済み。他のジャンルのトークンは
-# 従来通りyoutube.uploadスコープのままなので、全ジャンル一律で広いスコープを
-# 要求するとリフレッシュ時にinvalid_scopeエラーになる(実際に3003で発生した)
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
-PLAYLIST_SCOPES = ["https://www.googleapis.com/auth/youtube"]
+# OAuthのスコープは、コード側で固定せずtokenファイルに保存されている(認証時に付与された)
+# ものをそのまま使う。コード側で決め打ちすると、付与済みスコープと違う場合にリフレッシュ時
+# invalid_scopeエラーになる(狭いトークンに広いスコープを要求した3003、広いトークンに
+# 狭いスコープを要求した2001で、それぞれ実際に発生した)。再生リスト操作は広いyoutube
+# スコープで認証したtoken(10002・10010)でのみ成功し、権限が無ければ警告だけで続行する
 CREDENTIALS_DIR = Path.home() / "roujin_home_senka" / "credentials"
 YOUTUBE_TITLE_MAX_CHARS = 100  # YouTube側の上限
 
@@ -67,10 +65,6 @@ PLAYLIST_TITLE_EN_BY_SOURCE_GENRE = {
     "10009": "Security News",
 }
 
-# 再生リスト操作(広いyoutubeスコープ)が必要なトークンのジャンルID。
-# token_10002.json/token_10010.jsonはこのスコープで認証済みであること
-PLAYLIST_TOKEN_GENRE_IDS = {MERGED_INTO_GENRE_ID, "10010"}
-
 # 即時公開するジャンル(日本語ニュース・ITの教室・お金の教室)。それ以外
 # (英語版・学びなおし系・雑学等の新規に自動アップロード化したジャンル)は、
 # 内容の確認が済むまで限定公開でアップロードする(2026-10-06)
@@ -103,8 +97,7 @@ if not token_path.exists():
     print(f"ERROR: {token_path} がありません。先にauthorize_youtube.py(Windows側)で認証してください。")
     raise SystemExit(1)
 
-scopes = PLAYLIST_SCOPES if upload_token_genre_id in PLAYLIST_TOKEN_GENRE_IDS else SCOPES
-credentials = Credentials.from_authorized_user_file(str(token_path), scopes)
+credentials = Credentials.from_authorized_user_file(str(token_path))
 
 # アクセストークンが期限切れなら、リフレッシュトークンで更新して保存し直す
 if credentials.expired and credentials.refresh_token:
