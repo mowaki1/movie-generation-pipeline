@@ -9,8 +9,10 @@
 
 import json
 import sys
+import time
 from pathlib import Path
 
+import httplib2
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -144,15 +146,64 @@ body = {
     },
 }
 
-print(f"uploading: {title}")
-media = MediaFileUpload(str(OUTDIR / "movie.mp4"), chunksize=-1, resumable=True, mimetype="video/mp4")
-request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+# 動画全体を1回の通信で送る(chunksize=-1)と、200MB超の送信中に通信が切れたり
+# セッションが失効(410 Gone)したりしたとき、やり直せず失敗していた。分割して送り、
+# 一時的なエラーは再送、セッションが失われた場合は最初からやり直す
+UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024  # 256KBの倍数
+UPLOAD_MAX_RETRIES = 8
+UPLOAD_MAX_RESTARTS = 3
+RETRIABLE_STATUS_CODES = {500, 502, 503, 504}
+SESSION_LOST_STATUS_CODES = {404, 410}
 
-response = None
-while response is None:
-    status, response = request.next_chunk()
-    if status:
-        print(f"upload progress: {int(status.progress() * 100)}%")
+
+def upload_video():
+    for restart in range(UPLOAD_MAX_RESTARTS + 1):
+        media = MediaFileUpload(
+            str(OUTDIR / "movie.mp4"), chunksize=UPLOAD_CHUNK_SIZE, resumable=True, mimetype="video/mp4"
+        )
+        request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+
+        response = None
+        retries = 0
+        while response is None:
+            try:
+                status, response = request.next_chunk()
+                if status:
+                    print(f"upload progress: {int(status.progress() * 100)}%")
+                retries = 0
+            except HttpError as e:
+                code = e.resp.status
+                if code in SESSION_LOST_STATUS_CODES:
+                    print(f"upload session lost (HTTP {code}), restarting upload ({restart + 1}/{UPLOAD_MAX_RESTARTS})")
+                    break
+                if code != 401 and code not in RETRIABLE_STATUS_CODES:
+                    raise
+                retries += 1
+                if retries > UPLOAD_MAX_RETRIES:
+                    raise
+                if code == 401:
+                    credentials.refresh(Request())
+                    token_path.write_text(credentials.to_json(), encoding="utf-8")
+                wait = min(2 ** retries, 60)
+                print(f"upload error (HTTP {code}), retry {retries}/{UPLOAD_MAX_RETRIES} in {wait}s")
+                time.sleep(wait)
+            except (OSError, httplib2.HttpLib2Error) as e:
+                retries += 1
+                if retries > UPLOAD_MAX_RETRIES:
+                    raise
+                wait = min(2 ** retries, 60)
+                print(f"upload connection error ({e}), retry {retries}/{UPLOAD_MAX_RETRIES} in {wait}s")
+                time.sleep(wait)
+
+        if response is not None:
+            return response
+
+    print(f"ERROR: アップロードセッションが{UPLOAD_MAX_RESTARTS}回失われ、アップロードできませんでした")
+    raise SystemExit(1)
+
+
+print(f"uploading: {title}")
+response = upload_video()
 
 video_id = response["id"]
 print(f"uploaded ({privacy_status}): https://www.youtube.com/watch?v={video_id}")
