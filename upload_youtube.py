@@ -2,10 +2,10 @@
 # authorize_youtube.py(Windows側)で作成し、~/roujin_home_senka/credentials/ に
 # 転送済みの token_<genre_id>.json を使って認証する。
 #
-# 公開設定は、日本語ニュース・ITの教室・お金の教室は「公開」、それ以外
-# (英語版・学びなおし系・雑学等)は内容確認が済むまで「限定公開」
-# (PUBLIC_UPLOAD_GENRE_IDS参照)。以前はニュース系も事実誤認等のリスクから
-# 「限定公開」+手動確認としていた(2026-08-04合意)が、2026-09-18に即時公開へ変更。
+# 公開設定は、全ジャンル「公開」でアップロードする(PRIVACY_STATUSで切り替え可能)。
+# 以前はニュース系も事実誤認等のリスクから「限定公開」+手動確認としていた
+# (2026-08-04合意)が、2026-09-18に即時公開へ変更。英語版・学びなおし系・雑学は
+# 一時「限定公開」としていたが、2026-10-12に全ジャンル公開へ変更。
 
 import json
 import sys
@@ -67,13 +67,7 @@ PLAYLIST_TITLE_EN_BY_SOURCE_GENRE = {
     "10009": "Security News",
 }
 
-# 即時公開するジャンル(日本語ニュース・ITの教室・お金の教室)。それ以外
-# (英語版・学びなおし系・雑学等の新規に自動アップロード化したジャンル)は、
-# 内容の確認が済むまで限定公開でアップロードする(2026-10-06)
-PUBLIC_UPLOAD_GENRE_IDS = {
-    "10001", "10002", "10003", "10004", "10005", "10006", "10007", "10008", "10009",
-    "3003", "3004",
-}
+PRIVACY_STATUS = "public"
 
 args = sys.argv
 if len(args) < 3:
@@ -124,7 +118,7 @@ if tags_path.exists():
     tags = [t.strip() for t in tags_path.read_text(encoding="utf-8").split(",") if t.strip()]
 
 language = story.get("language", "ja")
-privacy_status = "public" if genre_id in PUBLIC_UPLOAD_GENRE_IDS else "unlisted"
+privacy_status = PRIVACY_STATUS
 
 body = {
     "snippet": {

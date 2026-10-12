@@ -68,7 +68,7 @@ STEPS = [
 ]
 
 # 英語版チャンネルのOAuth認証(authorize_youtube.py)が済んでtokenが置かれるまでは、
-# 動画の生成だけ行ってアップロードは見送る(限定公開で自動アップロードされる)
+# 動画の生成だけ行ってアップロードは見送る(tokenが置かれれば自動アップロードされる)
 if (CREDENTIALS_DIR / f"token_{en_genre_id}.json").exists():
     STEPS.append(["upload_youtube.py", en_genre_id, en_pipeline_no])
 else:

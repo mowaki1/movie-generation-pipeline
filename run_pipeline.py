@@ -14,8 +14,8 @@ theme = args[3]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-# YouTube自動投稿(限定公開)は、視聴確認・OAuth認証が済んだジャンルのみ有効にする。
-# 他の未認証ジャンルにも一律で組み込むと、tokenが無く失敗してしまうため。
+# tokenが必須(無ければエラーにして見逃さない)のジャンル。それ以外は、tokenが
+# 置かれたジャンルだけ自動アップロードし、未認証ならスキップする(下記参照)。
 YOUTUBE_UPLOAD_ENABLED_VARIANTS = {"3003", "3004"}
 
 STEPS = [
@@ -34,7 +34,7 @@ if variant_id in YOUTUBE_UPLOAD_ENABLED_VARIANTS:
     STEPS.append(["upload_youtube.py", variant_id, pipeline_no])
 elif (CREDENTIALS_DIR / f"token_{variant_id}.json").exists():
     # それ以外のジャンルは、チャンネル作成・OAuth認証(authorize_youtube.py)が
-    # 済んでtokenが置かれた時点から、限定公開で自動アップロードされる
+    # 済んでtokenが置かれた時点から、自動アップロードされる
     STEPS.append(["upload_youtube.py", variant_id, pipeline_no])
 else:
     print(f"note: token_{variant_id}.json が無いためYouTube自動アップロードは行いません")
